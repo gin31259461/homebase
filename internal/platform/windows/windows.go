@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/gin31259461/homebase/internal/config"
@@ -19,12 +20,44 @@ import (
 )
 
 const ID = "windows"
+const smallCleanupBytes int64 = 10 * 1024 * 1024
+
+var commandExists = system.CommandExists
 
 type Platform struct {
 	runner run.Runner
 }
 
 type stringList []string
+
+type itemStatus struct {
+	label     string
+	kind      string
+	installed bool
+	known     bool
+}
+
+type installItemInfo struct {
+	state     ui.SelectState
+	summary   string
+	detail    string
+	installed []string
+	missing   []string
+	unknown   []string
+}
+
+type cleanupItemInfo struct {
+	state   ui.SelectState
+	summary string
+	inspect []string
+}
+
+type installScan struct {
+	wingetKnown  bool
+	wingetIDs    map[string]bool
+	featureKnown bool
+	features     map[string]bool
+}
 
 type installPlan struct {
 	Features     []string
@@ -154,7 +187,7 @@ func runInstall(args []string, r run.Runner) error {
 		selected = groupKeys(groups)
 	}
 	if len(selected) == 0 {
-		selected, err = ui.SelectKeys("Package Groups", packageItems(groups))
+		selected, err = ui.SelectKeys("Package Groups", packageItems(r, groups))
 		if err != nil {
 			return err
 		}
@@ -194,7 +227,7 @@ func runCleanup(args []string, r run.Runner) error {
 	if err := config.EnsureForPlatform(ID, false); err != nil {
 		return err
 	}
-	tasks, err := config.LoadCleanupTasksForPlatform(ID, system.CommandExists)
+	tasks, err := config.LoadCleanupTasksForPlatform(ID, commandExists)
 	if err != nil {
 		return err
 	}
@@ -206,7 +239,7 @@ func runCleanup(args []string, r run.Runner) error {
 		}
 	}
 	if len(selected) == 0 {
-		selected, err = ui.SelectKeys("Cleanup Tasks", cleanupItems(tasks))
+		selected, err = ui.SelectKeys("Cleanup Tasks", cleanupItems(r, tasks))
 		if err != nil {
 			return err
 		}
@@ -244,14 +277,14 @@ func installBootstrapBasics(r run.Runner, basics []string) error {
 	for _, basic := range basics {
 		switch strings.ToLower(strings.TrimSpace(basic)) {
 		case "", "git":
-			if strings.TrimSpace(basic) == "" || system.CommandExists("git") {
+			if strings.TrimSpace(basic) == "" || commandExists("git") {
 				continue
 			}
 			if err := installWingetPackage(r, "Git.Git"); err != nil {
 				return err
 			}
 		case "go", "golang":
-			if system.CommandExists("go") {
+			if commandExists("go") {
 				continue
 			}
 			if err := installWingetPackage(r, "GoLang.Go"); err != nil {
@@ -377,21 +410,316 @@ func copyTree(src, dst string) error {
 	})
 }
 
-func packageItems(groups []config.PackageGroup) []ui.SelectItem {
+func packageItems(r run.Runner, groups []config.PackageGroup) []ui.SelectItem {
+	scan := scanWindowsInstallState(r, groups)
 	items := make([]ui.SelectItem, 0, len(groups))
 	for _, group := range groups {
+		info := windowsInstallInfo(group, scan)
 		items = append(items, ui.SelectItem{
 			Key:             group.Key,
 			Label:           group.Label,
-			Detail:          fmt.Sprintf("%d configured item(s)", countGroupItems(group)),
+			DetailValue:     info.summary,
+			Detail:          info.detail,
+			Inspect:         installInspect(group, info),
+			State:           info.state,
 			DefaultSelected: group.Default,
 		})
 	}
 	return items
 }
 
-func countGroupItems(group config.PackageGroup) int {
-	return len(group.Winget) + len(group.ScoopBuckets) + len(group.Scoop) + len(group.PSModules) + len(group.Features)
+func scanWindowsInstallState(r run.Runner, groups []config.PackageGroup) installScan {
+	scan := installScan{
+		wingetIDs: map[string]bool{},
+		features:  map[string]bool{},
+	}
+	if needsWingetScan(groups) && commandExists("winget") {
+		out, err := r.Capture("winget", "list", "--disable-interactivity")
+		if err == nil && strings.TrimSpace(out) != "" {
+			scan.wingetKnown = true
+			scan.wingetIDs = parseWingetListIDs(out)
+		}
+	}
+	if needsFeatureScan(groups) && commandExists(powerShellExe()) {
+		if features, ok := scanInstallFeatures(r); ok {
+			scan.featureKnown = true
+			scan.features = features
+		}
+	}
+	return scan
+}
+
+func needsWingetScan(groups []config.PackageGroup) bool {
+	for _, group := range groups {
+		if len(group.Winget) > 0 {
+			return true
+		}
+		for _, feature := range group.Features {
+			if feature == "powershell" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func needsFeatureScan(groups []config.PackageGroup) bool {
+	for _, group := range groups {
+		for _, feature := range group.Features {
+			if isScannableInstallFeature(feature) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isScannableInstallFeature(feature string) bool {
+	return feature == "wezterm-context-menu" || feature == "win10-classic-menu"
+}
+
+func scanInstallFeatures(r run.Runner) (map[string]bool, bool) {
+	out, err := r.Capture(powerShellExe(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", installFeatureScanCommand())
+	if err != nil {
+		return nil, false
+	}
+	features := map[string]bool{
+		"wezterm-context-menu": false,
+		"win10-classic-menu":   false,
+	}
+	for _, line := range strings.Split(out, "\n") {
+		key := strings.TrimSpace(line)
+		if _, ok := features[key]; ok {
+			features[key] = true
+		}
+	}
+	return features, true
+}
+
+func installFeatureScanCommand() string {
+	return "$found = @(); " +
+		"if (Test-Path 'HKCU:\\Software\\Classes\\Directory\\background\\shell\\wezterm-nightly') { $found += 'wezterm-context-menu' }; " +
+		"if (Test-Path 'HKCU:\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\\InprocServer32') { $found += 'win10-classic-menu' }; " +
+		"$found -join \"`n\""
+}
+
+func parseWingetListIDs(out string) map[string]bool {
+	ids := map[string]bool{}
+	for _, field := range strings.Fields(out) {
+		if strings.Contains(field, ".") {
+			ids[strings.ToLower(field)] = true
+		}
+	}
+	return ids
+}
+
+func windowsInstallInfo(group config.PackageGroup, scan installScan) installItemInfo {
+	statuses := installStatuses(group, scan)
+	total := len(statuses)
+	installed := 0
+	unknown := 0
+	info := installItemInfo{detail: installDetail(group)}
+	for _, status := range statuses {
+		label := status.kind + ": " + status.label
+		switch {
+		case !status.known:
+			unknown++
+			info.unknown = append(info.unknown, label)
+		case status.installed:
+			installed++
+			info.installed = append(info.installed, label)
+		default:
+			info.missing = append(info.missing, label)
+		}
+	}
+	info.summary = installSummary(installed, unknown, total)
+	info.state = windowsInstallState(installed, unknown, total)
+	return info
+}
+
+func installStatuses(group config.PackageGroup, scan installScan) []itemStatus {
+	var statuses []itemStatus
+	for _, value := range group.Features {
+		statuses = append(statuses, featureStatus(value, scan))
+	}
+	for _, value := range group.Winget {
+		statuses = append(statuses, wingetPackageStatus(value, scan))
+	}
+	for _, value := range group.ScoopBuckets {
+		statuses = append(statuses, scoopBucketStatus(value))
+	}
+	for _, value := range group.Scoop {
+		statuses = append(statuses, scoopPackageStatus(value))
+	}
+	for _, value := range group.PSModules {
+		statuses = append(statuses, psModuleStatus(value))
+	}
+	return statuses
+}
+
+func featureStatus(feature string, scan installScan) itemStatus {
+	status := itemStatus{label: feature, kind: "Feature", known: true}
+	switch feature {
+	case "scoop":
+		status.installed = scoopAvailable()
+	case "powershell":
+		if commandExists("pwsh") {
+			status.installed = true
+			return status
+		}
+		return wingetPackageStatus("Microsoft.PowerShell", scan).withLabel(feature, "Feature")
+	case "psreadline":
+		return psModuleStatus("PSReadLine").withLabel(feature, "Feature")
+	case "node-pnpm":
+		status.installed = commandExists("pnpm")
+	case "powershell-profile":
+		status.installed = powerShellProfileLinked()
+	case "wezterm-context-menu":
+		status.known = scan.featureKnown
+		status.installed = scan.features[feature]
+	case "win10-classic-menu":
+		status.known = scan.featureKnown
+		status.installed = scan.features[feature]
+	default:
+		status.known = false
+	}
+	return status
+}
+
+func (s itemStatus) withLabel(label, kind string) itemStatus {
+	s.label = label
+	s.kind = kind
+	return s
+}
+
+func wingetPackageStatus(id string, scan installScan) itemStatus {
+	status := itemStatus{label: id, kind: "WinGet", known: scan.wingetKnown}
+	if !scan.wingetKnown {
+		return status
+	}
+	status.installed = scan.wingetIDs[strings.ToLower(id)]
+	return status
+}
+
+func scoopBucketStatus(bucket string) itemStatus {
+	status := itemStatus{label: bucket, kind: "Scoop bucket", known: true}
+	status.installed = childDirExists(filepath.Join(config.Expand("~"), "scoop", "buckets"), bucket)
+	return status
+}
+
+func scoopPackageStatus(pkg string) itemStatus {
+	status := itemStatus{label: pkg, kind: "Scoop", known: true}
+	status.installed = childDirExists(filepath.Join(config.Expand("~"), "scoop", "apps"), pkg)
+	return status
+}
+
+func psModuleStatus(module string) itemStatus {
+	status := itemStatus{label: module, kind: "PowerShell module", known: true}
+	status.installed = powerShellModuleExists(module)
+	return status
+}
+
+func powerShellProfileLinked() bool {
+	paths := []string{
+		filepath.Join(config.Expand("~"), "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1"),
+		filepath.Join(config.Expand("~"), "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1"),
+	}
+	for _, path := range paths {
+		if _, err := os.Stat(path); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+func powerShellModuleExists(module string) bool {
+	roots := []string{
+		filepath.Join(config.Expand("~"), "Documents", "PowerShell", "Modules"),
+		filepath.Join(config.Expand("~"), "Documents", "WindowsPowerShell", "Modules"),
+	}
+	for _, root := range filepath.SplitList(os.Getenv("PSModulePath")) {
+		if strings.TrimSpace(root) != "" {
+			roots = append(roots, root)
+		}
+	}
+	for _, root := range roots {
+		if childDirExists(root, module) {
+			return true
+		}
+	}
+	return false
+}
+
+func childDirExists(parent, name string) bool {
+	entries, err := os.ReadDir(parent)
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if entry.IsDir() && strings.EqualFold(entry.Name(), name) {
+			return true
+		}
+	}
+	return false
+}
+
+func installSummary(installed, unknown, total int) string {
+	if total == 0 {
+		return "nothing configured"
+	}
+	summary := fmt.Sprintf("%d/%d installed", installed, total)
+	if unknown > 0 {
+		summary += fmt.Sprintf(", %d unknown", unknown)
+	}
+	return summary
+}
+
+func installDetail(group config.PackageGroup) string {
+	parts := []string{
+		fmt.Sprintf("%d WinGet", len(group.Winget)),
+		fmt.Sprintf("%d Scoop", len(group.Scoop)),
+		fmt.Sprintf("%d module(s)", len(group.PSModules)),
+		fmt.Sprintf("%d feature(s)", len(group.Features)),
+	}
+	if len(group.ScoopBuckets) > 0 {
+		parts = append(parts, fmt.Sprintf("%d bucket(s)", len(group.ScoopBuckets)))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func windowsInstallState(installed, unknown, total int) ui.SelectState {
+	switch {
+	case total == 0:
+		return ui.SelectStateGood
+	case unknown == total:
+		return ui.SelectStateUnknown
+	case installed == total:
+		return ui.SelectStateGood
+	case installed == 0 && unknown == 0:
+		return ui.SelectStateBad
+	default:
+		return ui.SelectStatePartial
+	}
+}
+
+func installInspect(group config.PackageGroup, info installItemInfo) string {
+	lines := []string{
+		"Label: " + group.Label,
+		"Configured: " + info.detail,
+	}
+	lines = appendStatusLines(lines, "Installed", info.installed)
+	lines = appendStatusLines(lines, "Missing", info.missing)
+	lines = appendStatusLines(lines, "Unknown", info.unknown)
+	return strings.Join(lines, "\n")
+}
+
+func appendStatusLines(lines []string, label string, values []string) []string {
+	if len(values) == 0 {
+		return lines
+	}
+	lines = append(lines, label+":")
+	lines = append(lines, values...)
+	return lines
 }
 
 func groupKeys(groups []config.PackageGroup) []string {
@@ -410,17 +738,297 @@ func packageGroupSet(groups []config.PackageGroup) map[string]bool {
 	return set
 }
 
-func cleanupItems(tasks []config.CleanupTask) []ui.SelectItem {
+func cleanupItems(r run.Runner, tasks []config.CleanupTask) []ui.SelectItem {
 	items := make([]ui.SelectItem, 0, len(tasks))
 	for _, task := range tasks {
+		info := windowsCleanupInfo(r, task)
 		items = append(items, ui.SelectItem{
 			Key:             task.Key,
 			Label:           task.Label,
+			DetailValue:     info.summary,
 			Detail:          task.Detail,
+			Inspect:         cleanupInspect(task, info),
+			State:           info.state,
 			DefaultSelected: task.Default,
 		})
 	}
 	return items
+}
+
+func windowsCleanupInfo(r run.Runner, task config.CleanupTask) cleanupItemInfo {
+	switch task.Key {
+	case "scoop-cache":
+		return dirCleanupInfo(filepath.Join(config.Expand("~"), "scoop", "cache"), "Scoop package cache")
+	case "temp-files":
+		return tempFilesCleanupInfo(r)
+	case "npm-cache":
+		return npmCacheCleanupInfo(r)
+	case "winget-cache":
+		return multiDirCleanupInfo("WinGet download cache", wingetCachePaths()...)
+	case "recycle-bin":
+		return recycleBinCleanupInfo(r)
+	case "thumbnail-cache":
+		return thumbnailCleanupInfo()
+	default:
+		return cleanupItemInfo{
+			state:   ui.SelectStateUnknown,
+			summary: "size unknown",
+			inspect: []string{"No scanner is implemented for this task yet."},
+		}
+	}
+}
+
+func tempFilesCleanupInfo(r run.Runner) cleanupItemInfo {
+	path := os.TempDir()
+	if commandExists(powerShellExe()) {
+		out, err := r.Capture(powerShellExe(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", tempFilesSizeCommand())
+		if err == nil {
+			if bytes, ok := parseInt64Line(out); ok {
+				return cleanupItemInfo{
+					state:   cleanupSizeState(bytes),
+					summary: formatBytes(bytes),
+					inspect: []string{"Windows Temp folder: " + formatBytes(bytes), "Path: " + path},
+				}
+			}
+		}
+	}
+	return dirCleanupInfo(path, "Windows Temp folder")
+}
+
+func tempFilesSizeCommand() string {
+	return "$path = [IO.Path]::GetTempPath(); " +
+		"$total = [int64]0; " +
+		"if (Test-Path -LiteralPath $path) { " +
+		"Get-ChildItem -LiteralPath $path -Force -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object { $total += $_.Length } " +
+		"}; " +
+		"Write-Output $total"
+}
+
+func recycleBinCleanupInfo(r run.Runner) cleanupItemInfo {
+	if !commandExists(powerShellExe()) {
+		return cleanupItemInfo{
+			state:   ui.SelectStateUnknown,
+			summary: "size unknown",
+			inspect: []string{"PowerShell is required to scan Recycle Bin size."},
+		}
+	}
+	out, err := r.Capture(powerShellExe(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", recycleBinSizeCommand())
+	if err != nil {
+		return cleanupItemInfo{
+			state:   ui.SelectStateUnknown,
+			summary: "size unknown",
+			inspect: []string{"Recycle Bin size scan failed; the cleanup task can still run."},
+		}
+	}
+	bytes, ok := parseInt64Line(out)
+	if !ok {
+		return cleanupItemInfo{
+			state:   ui.SelectStateUnknown,
+			summary: "size unknown",
+			inspect: []string{"Recycle Bin size output could not be parsed.", strings.TrimSpace(out)},
+		}
+	}
+	return cleanupItemInfo{
+		state:   cleanupSizeState(bytes),
+		summary: formatBytes(bytes),
+		inspect: []string{"Recycle Bin: " + formatBytes(bytes)},
+	}
+}
+
+func recycleBinSizeCommand() string {
+	return "$total = [int64]0; " +
+		"Get-PSDrive -PSProvider FileSystem | ForEach-Object { " +
+		"$path = Join-Path $_.Root '$Recycle.Bin'; " +
+		"if (Test-Path -LiteralPath $path) { " +
+		"Get-ChildItem -LiteralPath $path -Force -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object { $total += $_.Length } " +
+		"} }; " +
+		"Write-Output $total"
+}
+
+func parseInt64Line(out string) (int64, bool) {
+	lines := strings.Split(out, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		value, err := strconv.ParseInt(line, 10, 64)
+		return value, err == nil
+	}
+	return 0, false
+}
+
+func npmCacheCleanupInfo(r run.Runner) cleanupItemInfo {
+	if commandExists("npm") {
+		if out, err := r.Capture("npm", "config", "get", "cache"); err == nil && strings.TrimSpace(out) != "" {
+			return dirCleanupInfo(config.Expand(strings.TrimSpace(out)), "npm cache")
+		}
+	}
+	if local := os.Getenv("LOCALAPPDATA"); local != "" {
+		return dirCleanupInfo(filepath.Join(local, "npm-cache"), "npm cache")
+	}
+	return cleanupItemInfo{
+		state:   ui.SelectStateUnknown,
+		summary: "size unknown",
+		inspect: []string{"npm cache path could not be resolved."},
+	}
+}
+
+func wingetCachePaths() []string {
+	var paths []string
+	if local := os.Getenv("LOCALAPPDATA"); local != "" {
+		paths = append(paths, filepath.Join(local, "Packages", "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe", "LocalCache"))
+	}
+	if temp := os.TempDir(); temp != "" {
+		paths = append(paths, filepath.Join(temp, "WinGet"))
+	}
+	return paths
+}
+
+func thumbnailCleanupInfo() cleanupItemInfo {
+	local := os.Getenv("LOCALAPPDATA")
+	if local == "" {
+		return cleanupItemInfo{
+			state:   ui.SelectStateUnknown,
+			summary: "size unknown",
+			inspect: []string{"LOCALAPPDATA is not set."},
+		}
+	}
+	dir := filepath.Join(local, "Microsoft", "Windows", "Explorer")
+	bytes, ok := globSize(filepath.Join(dir, "thumbcache_*.db"))
+	if !ok {
+		return cleanupItemInfo{
+			state:   ui.SelectStateUnknown,
+			summary: "size unknown",
+			inspect: []string{"Thumbnail cache size could not be read.", "Path: " + dir},
+		}
+	}
+	return cleanupItemInfo{
+		state:   cleanupSizeState(bytes),
+		summary: formatBytes(bytes),
+		inspect: []string{"Thumbnail cache: " + formatBytes(bytes), "Path: " + dir},
+	}
+}
+
+func dirCleanupInfo(path, label string) cleanupItemInfo {
+	bytes, ok := dirSize(path)
+	if !ok {
+		return cleanupItemInfo{
+			state:   ui.SelectStateUnknown,
+			summary: "size unknown",
+			inspect: []string{label + ": size could not be read", "Path: " + path},
+		}
+	}
+	return cleanupItemInfo{
+		state:   cleanupSizeState(bytes),
+		summary: formatBytes(bytes),
+		inspect: []string{label + ": " + formatBytes(bytes), "Path: " + path},
+	}
+}
+
+func multiDirCleanupInfo(label string, paths ...string) cleanupItemInfo {
+	var total int64
+	var inspect []string
+	for _, path := range paths {
+		bytes, ok := dirSize(path)
+		if !ok {
+			inspect = append(inspect, path+": size could not be read")
+			continue
+		}
+		total += bytes
+		inspect = append(inspect, path+": "+formatBytes(bytes))
+	}
+	if len(inspect) == 0 {
+		return cleanupItemInfo{
+			state:   ui.SelectStateUnknown,
+			summary: "size unknown",
+			inspect: []string{label + " paths could not be resolved."},
+		}
+	}
+	return cleanupItemInfo{
+		state:   cleanupSizeState(total),
+		summary: formatBytes(total),
+		inspect: append([]string{label + ": " + formatBytes(total)}, inspect...),
+	}
+}
+
+func cleanupSizeState(bytes int64) ui.SelectState {
+	switch {
+	case bytes == 0:
+		return ui.SelectStateGood
+	case bytes < smallCleanupBytes:
+		return ui.SelectStatePartial
+	default:
+		return ui.SelectStateBad
+	}
+}
+
+func cleanupInspect(task config.CleanupTask, info cleanupItemInfo) string {
+	lines := []string{
+		"Label: " + task.Label,
+		"Command: " + task.Detail,
+		fmt.Sprintf("Sudo: %t", task.Sudo),
+	}
+	lines = append(lines, info.inspect...)
+	return strings.Join(lines, "\n")
+}
+
+func dirSize(path string) (int64, bool) {
+	var total int64
+	err := filepath.WalkDir(path, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return nil
+		}
+		total += info.Size()
+		return nil
+	})
+	if err == nil {
+		return total, true
+	}
+	if os.IsNotExist(err) {
+		return 0, true
+	}
+	return 0, false
+}
+
+func globSize(pattern string) (int64, bool) {
+	files, err := filepath.Glob(pattern)
+	if err != nil {
+		return 0, false
+	}
+	var total int64
+	for _, file := range files {
+		info, err := os.Stat(file)
+		if err != nil || info.IsDir() {
+			continue
+		}
+		total += info.Size()
+	}
+	return total, true
+}
+
+func formatBytes(bytes int64) string {
+	if bytes == 0 {
+		return "0 B"
+	}
+	units := []string{"B", "KiB", "MiB", "GiB", "TiB"}
+	value := float64(bytes)
+	unit := 0
+	for value >= 1024 && unit < len(units)-1 {
+		value /= 1024
+		unit++
+	}
+	if unit == 0 {
+		return fmt.Sprintf("%d %s", bytes, units[unit])
+	}
+	return fmt.Sprintf("%.1f %s", value, units[unit])
 }
 
 func cleanupTaskSet(tasks []config.CleanupTask) map[string]bool {
@@ -570,7 +1178,7 @@ func installFeature(r run.Runner, feature string) error {
 		if err := installWingetPackage(r, "OpenJS.NodeJS"); err != nil {
 			return err
 		}
-		if system.CommandExists("pnpm") {
+		if commandExists("pnpm") {
 			ui.OK("pnpm already installed")
 			return nil
 		}
@@ -587,7 +1195,7 @@ func installFeature(r run.Runner, feature string) error {
 }
 
 func installWingetPackage(r run.Runner, id string) error {
-	if system.CommandExists("winget") && r.Quiet("winget", "list", "--id", id, "--exact") == nil {
+	if commandExists("winget") && r.Quiet("winget", "list", "--id", id, "--exact") == nil {
 		ui.OK(id + " already installed")
 		return nil
 	}
@@ -692,7 +1300,7 @@ func runCleanupTask(r run.Runner, key string) error {
 	case "temp-files":
 		return r.Run(powerShellExe(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "Get-ChildItem $env:TEMP -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue")
 	case "npm-cache":
-		if !system.CommandExists("npm") {
+		if !commandExists("npm") {
 			ui.Warn("npm not found; skipping")
 			return nil
 		}
@@ -737,7 +1345,7 @@ func hbBinDir() string {
 }
 
 func scoopAvailable() bool {
-	if system.CommandExists("scoop") {
+	if commandExists("scoop") {
 		return true
 	}
 	if _, err := os.Stat(filepath.Join(config.Expand("~"), "scoop")); err == nil {
@@ -748,7 +1356,7 @@ func scoopAvailable() bool {
 }
 
 func powerShellExe() string {
-	if system.CommandExists("powershell.exe") {
+	if commandExists("powershell.exe") {
 		return "powershell.exe"
 	}
 	return "powershell"
