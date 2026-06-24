@@ -52,6 +52,6 @@ aur = [
 [msi]
 label = "MSI"
 aur = [
-  "msi-ec",
+  "msi-ec-git",
   "mcontrolcenter-bin",
 ]

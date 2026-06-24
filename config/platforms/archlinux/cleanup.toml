@@ -9,7 +9,7 @@ detail = "removes ~/.cache/yay - build dirs and tarballs"
 
 [orphans]
 label = "Orphaned packages"
-detail = "pacman -Rns - packages no longer required by any dep"
+detail = "review, then pacman -Rns - packages no longer required by any dep"
 sudo = true
 
 [journal]

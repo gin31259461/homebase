@@ -115,7 +115,7 @@ hb bootstrap [--yes] [--repo <repo>] [--install]
 hb install   [--group <key>] [--all] [--yes] [--no-setup]
 hb cleanup   [--task <key>] [--all] [--yes]
 hb sync      [-m <message>] [--no-push]
-hb config init
+hb config init [-f|--force]
 ```
 
 Interactive commands use Bubble Tea by default. For unattended runs, pass
@@ -151,6 +151,28 @@ Run the interactive selector:
 
 ```bash
 hb install
+```
+
+Interactive lists highlight calculated state values:
+
+- green: all installed or no cleanup work detected
+- yellow: partly installed, unknown, or small cleanup work
+- red: not installed or reclaimable cleanup work detected
+
+Item titles stay neutral. The highlighted value is the calculated package
+ratio, cleanup size, or reclaimable summary shown below the title.
+
+List controls:
+
+```text
+j/k, arrows  move
+gg, G        jump to top or bottom
+space        toggle the current item
+a            toggle all items
+i            inspect the current item
+ctrl+d/u     scroll inspect details
+enter        confirm
+q, esc       exit
 ```
 
 Install selected groups:
@@ -210,6 +232,17 @@ Windows cleanup tasks include Scoop cache, temp files, npm cache, WinGet cache,
 Recycle Bin, and thumbnail cache. Arch cleanup tasks include pacman cache,
 yay cache, orphaned packages, journal cleanup, npm cache, and thumbnails.
 
+Arch pacman cache cleanup shows the amount reclaimable by `paccache -r`, not
+the full `/var/cache/pacman/pkg` size. Inspect details include the total cache
+size for context.
+
+Arch orphan cleanup is intentionally conservative. The selector inspect view
+shows the package count, installed size when known, review guidance, and the
+full package list. Runtime removal prints the package list again, explains how
+to keep a package with `sudo pacman -D --asexplicit <package>`, asks an
+orphan-specific confirmation, and then runs `sudo pacman -Rns <packages...>`
+without `--noconfirm` so pacman can show its own transaction prompt.
+
 ## Sync Dotfiles
 
 `hb sync` stages configured paths from `$HOME`, commits them in the bare
@@ -259,10 +292,17 @@ config/
 At runtime, Homebase copies only the global config and the detected platform
 defaults into `~/.config/homebase`.
 
-Force-copy global config and the active platform config:
+Seed missing global config and active platform config without overwriting
+existing files:
 
 ```bash
 hb config init
+```
+
+Overwrite existing Homebase config from defaults:
+
+```bash
+hb config init --force
 ```
 
 Global config:
@@ -299,6 +339,7 @@ Package group fields:
 ```toml
 [example]
 label = "Example"
+default = false
 pacman = ["git"]
 aur = ["yay-bin"]
 winget = ["Git.Git"]
@@ -309,6 +350,24 @@ features = ["powershell-profile"]
 ```
 
 Use only the fields that apply to the target platform.
+Set `default = true` on a package group only when it should be preselected by
+the interactive install selector. Explicit `--group` and `--all` arguments
+ignore interactive defaults.
+
+Cleanup task fields:
+
+```toml
+[cache]
+label = "Cache"
+default = false
+detail = "safe cleanup command summary"
+requires = "optional-command"
+sudo = false
+```
+
+Set `default = true` on a cleanup task only when it should be preselected by
+the interactive cleanup selector. Explicit `--task` and `--all` arguments ignore
+interactive defaults.
 
 The dotfiles memory file supports TOML:
 
@@ -326,7 +385,7 @@ gofmt -w cmd internal
 go test ./...
 go vet ./...
 go build -o ~/.local/bin/hb ./cmd/hb
-markdownlint-cli2 README.md
+markdownlint-cli2 README.md AGENTS.md .agents/skills/homebase-platform-ui/SKILL.md
 ```
 
 The Makefile wraps the same workflow:
@@ -388,10 +447,16 @@ Set-Location ~/.local/lib/homebase
 go build -o ~/.local/bin/hb.exe ./cmd/hb
 ```
 
-If config is missing or stale:
+If config is missing:
 
 ```bash
 hb config init
+```
+
+If config should be reset from defaults:
+
+```bash
+hb config init --force
 ```
 
 If Windows cannot find `hb`, open a new terminal or confirm that this directory

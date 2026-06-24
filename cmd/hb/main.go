@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 
@@ -50,14 +51,23 @@ func main() {
 }
 
 func runConfig(args []string) error {
-	if len(args) != 1 || args[0] != "init" {
-		return fmt.Errorf("usage: hb config init")
+	if len(args) < 1 || args[0] != "init" {
+		return fmt.Errorf("usage: hb config init [-f|--force]")
+	}
+	fs := flag.NewFlagSet("config init", flag.ContinueOnError)
+	force := fs.Bool("force", false, "overwrite existing config")
+	fs.BoolVar(force, "f", false, "overwrite existing config")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return fmt.Errorf("usage: hb config init [-f|--force]")
 	}
 	active, err := platform.Detect(availablePlatforms())
 	if err != nil {
 		return err
 	}
-	return config.EnsureForPlatform(active.ID(), true)
+	return config.EnsureForPlatform(active.ID(), *force)
 }
 
 func availablePlatforms() []platform.Platform {
@@ -75,7 +85,7 @@ Usage:
   hb install   [--group <key>] [--all] [--yes] [--no-setup]
   hb cleanup   [--task <key>] [--all] [--yes]
   hb sync      [-m <message>] [--no-push]
-  hb config init
+  hb config init [-f|--force]
 
 Interactive commands use Bubble Tea by default. Automation should pass --yes
 with explicit --group/--task selections or --all.`)

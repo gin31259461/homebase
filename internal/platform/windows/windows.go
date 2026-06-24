@@ -385,9 +385,10 @@ func packageItems(groups []config.PackageGroup) []ui.SelectItem {
 	items := make([]ui.SelectItem, 0, len(groups))
 	for _, group := range groups {
 		items = append(items, ui.SelectItem{
-			Key:    group.Key,
-			Label:  group.Label,
-			Detail: fmt.Sprintf("%d configured item(s)", countGroupItems(group)),
+			Key:             group.Key,
+			Label:           group.Label,
+			Detail:          fmt.Sprintf("%d configured item(s)", countGroupItems(group)),
+			DefaultSelected: group.Default,
 		})
 	}
 	return items
@@ -416,7 +417,12 @@ func packageGroupSet(groups []config.PackageGroup) map[string]bool {
 func cleanupItems(tasks []config.CleanupTask) []ui.SelectItem {
 	items := make([]ui.SelectItem, 0, len(tasks))
 	for _, task := range tasks {
-		items = append(items, ui.SelectItem{Key: task.Key, Label: task.Label, Detail: task.Detail})
+		items = append(items, ui.SelectItem{
+			Key:             task.Key,
+			Label:           task.Label,
+			Detail:          task.Detail,
+			DefaultSelected: task.Default,
+		})
 	}
 	return items
 }

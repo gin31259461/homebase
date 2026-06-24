@@ -21,7 +21,7 @@ build:
 check: fmt test vet
 
 lint:
-	$(MARKDOWNLINT) README.md AGENTS.md
+	$(MARKDOWNLINT) README.md AGENTS.md .agents/skills/homebase-platform-ui/SKILL.md
 
 smoke: build
 	$(HB_BIN) help

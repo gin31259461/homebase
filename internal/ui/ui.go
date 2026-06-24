@@ -16,6 +16,7 @@ var (
 	TitleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39"))
 	OKStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
 	WarnStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
+	BadStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
 	DimStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 )
 
@@ -172,31 +173,60 @@ func clearSpinnerLine(message string) {
 }
 
 type SelectItem struct {
-	Key    string
-	Label  string
-	Detail string
+	Key             string
+	Label           string
+	DetailValue     string
+	Detail          string
+	Inspect         string
+	State           SelectState
+	DefaultSelected bool
 }
+
+type SelectState string
+
+const (
+	SelectStateNone    SelectState = ""
+	SelectStateUnknown SelectState = "unknown"
+	SelectStateGood    SelectState = "good"
+	SelectStatePartial SelectState = "partial"
+	SelectStateBad     SelectState = "bad"
+)
 
 type SelectorModel struct {
-	title    string
-	items    []SelectItem
-	cursor   int
-	offset   int
-	height   int
-	selected map[int]bool
-	quitting bool
-	done     bool
+	title         string
+	items         []SelectItem
+	cursor        int
+	offset        int
+	height        int
+	width         int
+	selected      map[int]bool
+	inspect       bool
+	inspectOffset int
+	pendingG      bool
+	quitting      bool
+	done          bool
 }
 
-const DefaultSelectorHeight = 10
+const (
+	DefaultSelectorHeight = 10
+	DefaultSelectorWidth  = 96
+	InspectHeight         = 8
+)
 
 func NewSelector(title string, items []SelectItem) SelectorModel {
-	return SelectorModel{
+	m := SelectorModel{
 		title:    title,
 		items:    items,
 		height:   DefaultSelectorHeight,
+		width:    DefaultSelectorWidth,
 		selected: map[int]bool{},
 	}
+	for i, item := range items {
+		if item.DefaultSelected {
+			m.selected[i] = true
+		}
+	}
+	return m
 }
 
 func (m SelectorModel) Init() tea.Cmd { return nil }
@@ -205,12 +235,31 @@ func (m SelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.height = SelectorHeightForWindow(msg.Height)
+		if msg.Width > 0 {
+			m.width = msg.Width
+		}
 		m = m.keepCursorVisible()
 	case tea.KeyMsg:
-		switch msg.String() {
+		key := msg.String()
+		oldCursor := m.cursor
+		switch key {
 		case "ctrl+c", "esc", "q":
 			m.quitting = true
 			return m, tea.Quit
+		case "ctrl+u":
+			if m.inspect {
+				m.inspectOffset -= InspectHeight / 2
+				if m.inspectOffset < 0 {
+					m.inspectOffset = 0
+				}
+				return m, nil
+			}
+		case "ctrl+d":
+			if m.inspect {
+				m.inspectOffset += InspectHeight / 2
+				m.inspectOffset = m.clampInspectOffset()
+				return m, nil
+			}
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
@@ -231,10 +280,27 @@ func (m SelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "home":
 			m.cursor = 0
-		case "end":
-			m.cursor = len(m.items) - 1
+		case "end", "G", "shift+g":
+			if len(m.items) > 0 {
+				m.cursor = len(m.items) - 1
+			}
+		case "g":
+			if m.pendingG {
+				m.cursor = 0
+				m.pendingG = false
+			} else {
+				m.pendingG = true
+				return m, nil
+			}
 		case " ", "x":
-			m.selected[m.cursor] = !m.selected[m.cursor]
+			if len(m.items) > 0 {
+				m.selected[m.cursor] = !m.selected[m.cursor]
+			}
+		case "i":
+			if len(m.items) > 0 && strings.TrimSpace(m.items[m.cursor].Inspect) != "" {
+				m.inspect = !m.inspect
+				m.inspectOffset = 0
+			}
 		case "a":
 			all := len(m.selected) != len(m.items)
 			m.selected = map[int]bool{}
@@ -247,8 +313,15 @@ func (m SelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.done = true
 			return m, tea.Quit
 		}
+		if key != "g" {
+			m.pendingG = false
+		}
+		if m.cursor != oldCursor {
+			m.inspectOffset = 0
+		}
 	}
 	m = m.keepCursorVisible()
+	m.inspectOffset = m.clampInspectOffset()
 	return m, nil
 }
 
@@ -257,16 +330,19 @@ func (m SelectorModel) View() string {
 		return ""
 	}
 	var b strings.Builder
+	contentWidth := m.listContentWidth()
 	b.WriteString(TitleStyle.Render(m.title))
 	b.WriteString("\n")
-	b.WriteString(DimStyle.Render("space toggles, a selects all, pgup/pgdown scroll, enter confirms, q exits"))
-	b.WriteString("\n\n")
+	help := "j/k move, gg/G jump, space toggles, a selects all, i inspects, ctrl+d/u scroll inspect, enter confirms, q exits"
+	appendWrapped(&b, help, contentWidth, "", DimStyle)
+	b.WriteString("\n")
 	visible := m.visibleCount()
 	start := m.offset
 	end := start + visible
 	if end > len(m.items) {
 		end = len(m.items)
 	}
+	keyWidth, labelWidth := selectorColumnWidths(contentWidth)
 	for i := start; i < end; i++ {
 		item := m.items[i]
 		cursor := " "
@@ -277,15 +353,297 @@ func (m SelectorModel) View() string {
 		if m.selected[i] {
 			box = "[x]"
 		}
-		b.WriteString(fmt.Sprintf("%s %s %-16s %s\n", cursor, box, item.Key, item.Label))
-		if item.Detail != "" {
-			b.WriteString("    " + DimStyle.Render(item.Detail) + "\n")
+		scroll := m.scrollbar(i-start, visible)
+		row := strings.Join([]string{
+			cursor,
+			box,
+			padRight(truncateCells(item.Key, keyWidth), keyWidth),
+			padRight(truncateCells(item.Label, labelWidth), labelWidth),
+		}, " ")
+		b.WriteString(padRight(row, contentWidth))
+		b.WriteString(" ")
+		b.WriteString(scroll)
+		b.WriteString("\n")
+		if item.DetailValue != "" || item.Detail != "" {
+			appendItemDetail(&b, item, contentWidth)
 		}
 	}
 	if len(m.items) > visible {
 		b.WriteString(DimStyle.Render(fmt.Sprintf("\nshowing %d-%d of %d", start+1, end, len(m.items))))
 	}
+	if m.inspect && len(m.items) > 0 {
+		inspect := strings.TrimSpace(m.items[m.cursor].Inspect)
+		if inspect != "" {
+			b.WriteString("\n\n")
+			b.WriteString(TitleStyle.Render("Inspect " + m.items[m.cursor].Key))
+			b.WriteString("\n")
+			lines := strings.Split(inspect, "\n")
+			lines = wrapLines(lines, contentWidth-2)
+			m.inspectOffset = m.clampInspectOffset()
+			inspectEnd := m.inspectOffset + InspectHeight
+			if inspectEnd > len(lines) {
+				inspectEnd = len(lines)
+			}
+			for _, line := range lines[m.inspectOffset:inspectEnd] {
+				b.WriteString("  ")
+				b.WriteString(line)
+				b.WriteString("\n")
+			}
+			for i := inspectEnd - m.inspectOffset; i < InspectHeight; i++ {
+				b.WriteString("\n")
+			}
+			if len(lines) > InspectHeight {
+				b.WriteString(DimStyle.Render(fmt.Sprintf("showing %d-%d of %d", m.inspectOffset+1, inspectEnd, len(lines))))
+				b.WriteString("\n")
+			}
+		}
+	}
 	return b.String()
+}
+
+func appendItemDetail(b *strings.Builder, item SelectItem, width int) {
+	prefix := "    "
+	if item.DetailValue == "" {
+		appendWrapped(b, item.Detail, width, prefix, DimStyle)
+		return
+	}
+	detail := item.DetailValue
+	if item.Detail != "" {
+		detail += " - " + item.Detail
+	}
+	lineWidth := width - lipgloss.Width(prefix)
+	if lineWidth < 1 {
+		lineWidth = 1
+	}
+	lines := wrapCells(detail, lineWidth)
+	remainingValue := item.DetailValue
+	for _, line := range lines {
+		rendered := prefix + renderDetailLine(line, &remainingValue, item.State)
+		b.WriteString(padRight(rendered, width))
+		b.WriteString(" ")
+		b.WriteString(DimStyle.Render(" "))
+		b.WriteString("\n")
+	}
+}
+
+func renderDetailLine(line string, remainingValue *string, state SelectState) string {
+	if *remainingValue == "" {
+		return DimStyle.Render(line)
+	}
+	if strings.HasPrefix(*remainingValue, line) {
+		*remainingValue = strings.TrimPrefix(*remainingValue, line)
+		return renderStateText(line, state)
+	}
+	if strings.HasPrefix(line, *remainingValue) {
+		value := *remainingValue
+		*remainingValue = ""
+		return renderStateText(value, state) + DimStyle.Render(strings.TrimPrefix(line, value))
+	}
+	valuePart := commonPrefix(line, *remainingValue)
+	if valuePart == "" {
+		*remainingValue = ""
+		return DimStyle.Render(line)
+	}
+	*remainingValue = strings.TrimPrefix(*remainingValue, valuePart)
+	return renderStateText(valuePart, state) + DimStyle.Render(strings.TrimPrefix(line, valuePart))
+}
+
+func renderStateText(text string, state SelectState) string {
+	switch state {
+	case SelectStateGood:
+		return OKStyle.Render(text)
+	case SelectStatePartial:
+		return WarnStyle.Render(text)
+	case SelectStateBad:
+		return BadStyle.Render(text)
+	case SelectStateUnknown:
+		return DimStyle.Render(text)
+	default:
+		return text
+	}
+}
+
+func commonPrefix(a, b string) string {
+	ar := []rune(a)
+	br := []rune(b)
+	limit := len(ar)
+	if len(br) < limit {
+		limit = len(br)
+	}
+	i := 0
+	for i < limit && ar[i] == br[i] {
+		i++
+	}
+	return string(ar[:i])
+}
+
+func (m SelectorModel) scrollbar(row, visible int) string {
+	total := len(m.items)
+	if total <= visible || visible <= 0 {
+		return " "
+	}
+	maxThumbStart := visible - 1
+	maxOffset := total - visible
+	thumbRow := 0
+	if maxOffset > 0 {
+		thumbRow = m.offset * maxThumbStart / maxOffset
+	}
+	if row == thumbRow {
+		return OKStyle.Render("|")
+	}
+	return DimStyle.Render(":")
+}
+
+func (m SelectorModel) listContentWidth() int {
+	width := m.width - 2
+	if width < 20 {
+		return 20
+	}
+	if width > 120 {
+		return 120
+	}
+	return width
+}
+
+func selectorColumnWidths(width int) (int, int) {
+	available := width - 7
+	if available < 2 {
+		return 1, 1
+	}
+	keyWidth := 16
+	if available < 44 {
+		keyWidth = available / 3
+		if keyWidth < 6 {
+			keyWidth = 6
+		}
+	}
+	if keyWidth > available-1 {
+		keyWidth = available - 1
+	}
+	return keyWidth, available - keyWidth
+}
+
+func (m SelectorModel) clampInspectOffset() int {
+	if !m.inspect || len(m.items) == 0 {
+		return 0
+	}
+	lines := wrapLines(strings.Split(strings.TrimSpace(m.items[m.cursor].Inspect), "\n"), m.listContentWidth()-2)
+	maxOffset := len(lines) - InspectHeight
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if m.inspectOffset > maxOffset {
+		return maxOffset
+	}
+	if m.inspectOffset < 0 {
+		return 0
+	}
+	return m.inspectOffset
+}
+
+func appendWrapped(b *strings.Builder, text string, width int, prefix string, style lipgloss.Style) {
+	lineWidth := width - lipgloss.Width(prefix)
+	if lineWidth < 1 {
+		lineWidth = 1
+	}
+	for _, line := range wrapCells(text, lineWidth) {
+		rendered := style.Render(prefix + line)
+		b.WriteString(padRight(rendered, width))
+		b.WriteString(" ")
+		b.WriteString(DimStyle.Render(" "))
+		b.WriteString("\n")
+	}
+}
+
+func wrapLines(lines []string, width int) []string {
+	var out []string
+	for _, line := range lines {
+		out = append(out, wrapCells(line, width)...)
+	}
+	if len(out) == 0 {
+		return []string{""}
+	}
+	return out
+}
+
+func wrapCells(text string, width int) []string {
+	if width <= 0 {
+		return []string{""}
+	}
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return []string{""}
+	}
+	var lines []string
+	line := ""
+	for _, word := range words {
+		parts := splitCells(word, width)
+		for _, part := range parts {
+			if line == "" {
+				line = part
+				continue
+			}
+			next := line + " " + part
+			if lipgloss.Width(next) <= width {
+				line = next
+				continue
+			}
+			lines = append(lines, line)
+			line = part
+		}
+	}
+	if line != "" {
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+func splitCells(text string, width int) []string {
+	if lipgloss.Width(text) <= width {
+		return []string{text}
+	}
+	var parts []string
+	var current strings.Builder
+	currentWidth := 0
+	for _, r := range text {
+		rw := lipgloss.Width(string(r))
+		if currentWidth > 0 && currentWidth+rw > width {
+			parts = append(parts, current.String())
+			current.Reset()
+			currentWidth = 0
+		}
+		current.WriteRune(r)
+		currentWidth += rw
+	}
+	if current.Len() > 0 {
+		parts = append(parts, current.String())
+	}
+	return parts
+}
+
+func padRight(s string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	current := lipgloss.Width(s)
+	if current >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-current)
+}
+
+func truncateCells(s string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	if lipgloss.Width(s) <= width {
+		return s
+	}
+	runes := []rune(s)
+	for len(runes) > 0 && lipgloss.Width(string(runes))+1 > width {
+		runes = runes[:len(runes)-1]
+	}
+	return string(runes) + "."
 }
 
 func (m SelectorModel) SelectedKeys() []string {

@@ -35,6 +35,8 @@ dispatches commands to platform-specific code.
 - Keep platform-specific behavior under `internal/platform/<id>` when possible
 - Use the runner abstraction for code that shells out
 - Do not run package install, cleanup, sudo, or bootstrap side effects in tests
+- For install/cleanup UI or platform parity work, read:
+  `.agents/skills/homebase-platform-ui/SKILL.md`
 
 ## Testing
 
@@ -67,7 +69,7 @@ go build -o ~/.local/bin/hb ./cmd/hb
 For README or Markdown changes, also run:
 
 ```bash
-markdownlint-cli2 README.md
+markdownlint-cli2 README.md AGENTS.md .agents/skills/homebase-platform-ui/SKILL.md
 ```
 
 Smoke-check the CLI when command routing changes:

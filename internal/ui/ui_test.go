@@ -1,6 +1,12 @@
 package ui
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
 
 func TestSelectorHeightForWindow(t *testing.T) {
 	tests := []struct {
@@ -27,5 +33,146 @@ func TestSelectorKeepsCursorVisible(t *testing.T) {
 	m = m.keepCursorVisible()
 	if m.offset != 3 {
 		t.Fatalf("offset = %d; want 3", m.offset)
+	}
+}
+
+func TestSelectorDefaultsSelected(t *testing.T) {
+	m := NewSelector("test", []SelectItem{
+		{Key: "core", DefaultSelected: true},
+		{Key: "dev"},
+	})
+	got := m.SelectedKeys()
+	if len(got) != 1 || got[0] != "core" {
+		t.Fatalf("selected = %#v; want [core]", got)
+	}
+}
+
+func TestSelectorVimJumps(t *testing.T) {
+	model := NewSelector("test", []SelectItem{
+		{Key: "0"}, {Key: "1"}, {Key: "2"},
+	})
+	var teaModel tea.Model = model
+	teaModel, _ = teaModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}})
+	model = teaModel.(SelectorModel)
+	if model.cursor != 2 {
+		t.Fatalf("cursor after G = %d; want 2", model.cursor)
+	}
+	teaModel = model
+	teaModel, _ = teaModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
+	teaModel, _ = teaModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
+	model = teaModel.(SelectorModel)
+	if model.cursor != 0 {
+		t.Fatalf("cursor after gg = %d; want 0", model.cursor)
+	}
+}
+
+func TestSelectorStateTextHighlight(t *testing.T) {
+	tests := []struct {
+		state SelectState
+		text  string
+	}{
+		{SelectStateGood, "good"},
+		{SelectStatePartial, "partial"},
+		{SelectStateBad, "bad"},
+		{SelectStateUnknown, "unknown"},
+	}
+	for _, tt := range tests {
+		if got := renderStateText(tt.text, tt.state); !strings.Contains(got, tt.text) {
+			t.Fatalf("state text = %q; want to contain %q", got, tt.text)
+		}
+	}
+}
+
+func TestSelectorHighlightsDetailValueNotTitle(t *testing.T) {
+	model := NewSelector("test", []SelectItem{
+		{
+			Key:         "orphans",
+			Label:       "Orphaned packages",
+			DetailValue: "2 orphaned package(s), 2.5 MiB",
+			Detail:      "pacman -Rns",
+			State:       SelectStateBad,
+		},
+	})
+	view := model.View()
+	if !strings.Contains(view, "orphans") || !strings.Contains(view, "Orphaned packages") {
+		t.Fatalf("view lost neutral title text:\n%s", view)
+	}
+	if !strings.Contains(view, "2 orphaned package(s), 2.5 MiB") {
+		t.Fatalf("view lost calculated detail value:\n%s", view)
+	}
+	if !strings.Contains(view, "pacman -Rns") {
+		t.Fatalf("view lost static detail:\n%s", view)
+	}
+}
+
+func TestSelectorScrollbarUsesTrackAndSingleThumb(t *testing.T) {
+	model := NewSelector("test", []SelectItem{
+		{Key: "0"}, {Key: "1"}, {Key: "2"}, {Key: "3"}, {Key: "4"},
+		{Key: "5"}, {Key: "6"}, {Key: "7"}, {Key: "8"}, {Key: "9"},
+	})
+	model.height = 4
+	thumbs := 0
+	tracks := 0
+	for row := 0; row < model.visibleCount(); row++ {
+		scroll := model.scrollbar(row, model.visibleCount())
+		if strings.Contains(scroll, "|") {
+			thumbs++
+		}
+		if strings.Contains(scroll, ":") {
+			tracks++
+		}
+	}
+	if thumbs != 1 {
+		t.Fatalf("scrollbar thumbs = %d; want 1", thumbs)
+	}
+	if tracks != model.visibleCount()-1 {
+		t.Fatalf("scrollbar tracks = %d; want %d", tracks, model.visibleCount()-1)
+	}
+}
+
+func TestSelectorInspectCtrlScroll(t *testing.T) {
+	model := NewSelector("test", []SelectItem{
+		{Key: "core", Inspect: strings.Join([]string{
+			"line 1", "line 2", "line 3", "line 4", "line 5", "line 6",
+			"line 7", "line 8", "line 9", "line 10", "line 11", "line 12",
+		}, "\n")},
+	})
+	var teaModel tea.Model = model
+	teaModel, _ = teaModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	teaModel, _ = teaModel.Update(tea.KeyMsg{Type: tea.KeyCtrlD})
+	model = teaModel.(SelectorModel)
+	if model.inspectOffset != InspectHeight/2 {
+		t.Fatalf("inspect offset after ctrl+d = %d; want %d", model.inspectOffset, InspectHeight/2)
+	}
+	teaModel = model
+	teaModel, _ = teaModel.Update(tea.KeyMsg{Type: tea.KeyCtrlU})
+	model = teaModel.(SelectorModel)
+	if model.inspectOffset != 0 {
+		t.Fatalf("inspect offset after ctrl+u = %d; want 0", model.inspectOffset)
+	}
+}
+
+func TestSelectorWrapsDescriptionToWindowWidth(t *testing.T) {
+	model := NewSelector("test", []SelectItem{
+		{
+			Key:    "very-long-key",
+			Label:  "Very long label",
+			Detail: "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu",
+			Inspect: strings.Join([]string{
+				"alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu",
+				"abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz",
+			}, "\n"),
+		},
+	})
+	model.width = 42
+	model.inspect = true
+	view := model.View()
+	for _, line := range strings.Split(view, "\n") {
+		if got := lipgloss.Width(line); got > model.width {
+			t.Fatalf("line width = %d, want <= %d: %q", got, model.width, line)
+		}
+	}
+	if !strings.Contains(view, "lambda mu") {
+		t.Fatalf("wrapped view lost detail suffix:\n%s", view)
 	}
 }

@@ -19,7 +19,6 @@ pacman = [
 label = "Fonts"
 pacman = [
   "noto-fonts",
-  "noto-fonts-cjk",
   "noto-fonts-emoji",
   "otf-font-awesome",
   "ttf-jetbrains-mono-nerd",

@@ -37,6 +37,7 @@ type PackageManager struct {
 type PackageGroup struct {
 	Key          string
 	Label        string   `toml:"label"`
+	Default      bool     `toml:"default"`
 	Pacman       []string `toml:"pacman"`
 	AUR          []string `toml:"aur"`
 	ScoopBuckets []string `toml:"scoop_buckets"`
@@ -49,6 +50,7 @@ type PackageGroup struct {
 type CleanupTask struct {
 	Key      string
 	Label    string `toml:"label"`
+	Default  bool   `toml:"default"`
 	Detail   string `toml:"detail"`
 	Requires string `toml:"requires"`
 	Sudo     bool   `toml:"sudo"`

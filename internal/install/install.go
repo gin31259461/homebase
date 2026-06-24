@@ -232,13 +232,54 @@ func PackageItems(groups []config.PackageGroup, installed map[string]bool) []ui.
 	var items []ui.SelectItem
 	for _, group := range groups {
 		all := append(append([]string{}, group.Pacman...), group.AUR...)
+		installedPkgs, missingPkgs := splitInstalled(all, installed)
+		state := installState(len(installedPkgs), len(all))
 		items = append(items, ui.SelectItem{
-			Key:    group.Key,
-			Label:  group.Label,
-			Detail: fmt.Sprintf("%s installed, %d total", installRatio(all, installed), len(all)),
+			Key:             group.Key,
+			Label:           group.Label,
+			DetailValue:     fmt.Sprintf("%s installed, %d pacman, %d AUR", installRatio(all, installed), len(group.Pacman), len(group.AUR)),
+			Inspect:         installInspect(group, installedPkgs, missingPkgs),
+			State:           state,
+			DefaultSelected: group.Default,
 		})
 	}
 	return items
+}
+
+func installState(installed, total int) ui.SelectState {
+	if total == 0 {
+		return ui.SelectStateGood
+	}
+	switch {
+	case installed == total:
+		return ui.SelectStateGood
+	case installed == 0:
+		return ui.SelectStateBad
+	default:
+		return ui.SelectStatePartial
+	}
+}
+
+func splitInstalled(pkgs []string, installed map[string]bool) ([]string, []string) {
+	var installedPkgs, missingPkgs []string
+	for _, pkg := range pkgs {
+		if installed[pkg] {
+			installedPkgs = append(installedPkgs, pkg)
+		} else {
+			missingPkgs = append(missingPkgs, pkg)
+		}
+	}
+	return installedPkgs, missingPkgs
+}
+
+func installInspect(group config.PackageGroup, installedPkgs, missingPkgs []string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Label: %s\n", group.Label)
+	fmt.Fprintf(&b, "Pacman: %s\n", strings.Join(group.Pacman, ", "))
+	fmt.Fprintf(&b, "AUR: %s\n", strings.Join(group.AUR, ", "))
+	fmt.Fprintf(&b, "Installed: %s\n", strings.Join(installedPkgs, ", "))
+	fmt.Fprintf(&b, "Missing: %s", strings.Join(missingPkgs, ", "))
+	return b.String()
 }
 
 func installRatio(pkgs []string, installed map[string]bool) string {

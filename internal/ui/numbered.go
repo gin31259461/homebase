@@ -9,9 +9,16 @@ import (
 func NumberedSelect(title string, items []SelectItem) ([]string, error) {
 	Section(title)
 	for i, item := range items {
-		fmt.Printf("%2d. %-16s %s\n", i+1, item.Key, item.Label)
+		marker := " "
+		if item.DefaultSelected {
+			marker = "*"
+		}
+		fmt.Printf("%2d.%s %-16s %s\n", i+1, marker, item.Key, item.Label)
 	}
-	text := PromptText("Select numbers, ranges, or all", "")
+	text := PromptText("Select numbers, ranges, all, or enter for defaults", "")
+	if strings.TrimSpace(text) == "" {
+		return defaultSelectedKeys(items), nil
+	}
 	if strings.EqualFold(strings.TrimSpace(text), "all") {
 		var keys []string
 		for _, item := range items {
@@ -38,4 +45,14 @@ func NumberedSelect(title string, items []SelectItem) ([]string, error) {
 		}
 	}
 	return keys, nil
+}
+
+func defaultSelectedKeys(items []SelectItem) []string {
+	var keys []string
+	for _, item := range items {
+		if item.DefaultSelected {
+			keys = append(keys, item.Key)
+		}
+	}
+	return keys
 }
