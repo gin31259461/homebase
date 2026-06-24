@@ -1,0 +1,48 @@
+[core]
+label = "Core Hyprland"
+pacman = [
+  "hyprland",
+  "hyprpolkitagent",
+  "hyprlock",
+  "hypridle",
+  "hyprsunset",
+  "xdg-desktop-portal-hyprland",
+  "xdg-desktop-portal-gtk",
+  "uwsm",
+  "libnewt",
+]
+
+[shell]
+label = "Shell & Prompt"
+pacman = [
+  "zsh",
+  "zsh-completions",
+  "gum",
+  "lsd",
+  "fastfetch",
+]
+
+[cli-tools]
+label = "CLI Tools"
+pacman = [
+  "fzf",
+  "fd",
+  "thefuck",
+  "tldr",
+  "eza",
+  "bat",
+  "git-delta",
+]
+
+[terminal]
+label = "Terminals"
+pacman = [
+  "kitty",
+  "ghostty",
+]
+
+[dm]
+label = "Display Manager"
+pacman = [
+  "sddm",
+]

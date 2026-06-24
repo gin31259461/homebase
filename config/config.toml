@@ -1,0 +1,23 @@
+[homebase]
+repo = "https://github.com/gin31259461/homebase.git"
+dir = "~/.local/lib/homebase"
+
+[dotfiles]
+ssh_repo = "git@github.com:gin31259461/dotfiles-arch.git"
+https_repo = "https://github.com/gin31259461/dotfiles-arch.git"
+dir = "~/.dotfiles"
+branch = "main"
+memory_file = "~/.dotfiles-repo"
+
+[package_manager]
+official = "pacman"
+aur = "yay"
+
+[bootstrap]
+basics = [
+  "git",
+  "rsync",
+  "base-devel",
+  "go",
+  "ca-certificates",
+]

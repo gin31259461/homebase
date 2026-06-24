@@ -1,0 +1,52 @@
+[files]
+label = "File Manager"
+pacman = [
+  "thunar",
+  "thunar-archive-plugin",
+  "thunar-volman",
+  "tumbler",
+  "gvfs",
+  "gvfs-mtp",
+  "ffmpegthumbnailer",
+  "xarchiver",
+]
+
+[audio]
+label = "Audio"
+pacman = [
+  "pipewire",
+  "pipewire-alsa",
+  "pipewire-audio",
+  "pipewire-pulse",
+  "wireplumber",
+  "pavucontrol",
+  "playerctl",
+  "mpv",
+  "mpv-mpris",
+]
+
+[network]
+label = "Network & Bluetooth"
+pacman = [
+  "networkmanager",
+  "networkmanager-openconnect",
+  "networkmanager-openvpn",
+  "network-manager-applet",
+  "nm-connection-editor",
+  "bluez",
+  "bluez-utils",
+  "blueman",
+  "dnsmasq",
+  "hostapd",
+]
+
+[capture]
+label = "Screenshot & Clipboard"
+pacman = [
+  "grim",
+  "slurp",
+  "swappy",
+  "cliphist",
+  "wl-clipboard",
+  "libnotify",
+]

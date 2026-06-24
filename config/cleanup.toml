@@ -1,0 +1,27 @@
+[pacman-cache]
+label = "Pacman package cache"
+detail = "paccache -r - keeps last 3 versions per package"
+sudo = true
+
+[yay-cache]
+label = "AUR build cache"
+detail = "removes ~/.cache/yay - build dirs and tarballs"
+
+[orphans]
+label = "Orphaned packages"
+detail = "pacman -Rns - packages no longer required by any dep"
+sudo = true
+
+[journal]
+label = "Systemd journal"
+detail = "--vacuum-time=2weeks - discards logs older than 2 weeks"
+sudo = true
+
+[npm-cache]
+label = "npm cache"
+detail = "npm cache clean --force - ~/.npm"
+requires = "npm"
+
+[thumbnails]
+label = "Thumbnail cache"
+detail = "rm -rf ~/.cache/thumbnails - safe, rebuilds on demand"

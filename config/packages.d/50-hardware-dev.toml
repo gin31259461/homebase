@@ -1,0 +1,57 @@
+[razer]
+label = "Razer Devices"
+pacman = [
+  "openrazer-daemon",
+  "openrazer-driver-dkms",
+]
+aur = [
+  "polychromatic",
+]
+
+[amd]
+label = "AMD GPU Drivers"
+pacman = [
+  "vulkan-radeon",
+  "lib32-vulkan-radeon",
+  "libva-utils",
+  "amd-ucode",
+  "amdgpu_top",
+  "vulkan-tools",
+]
+
+[dev]
+label = "Dev Tools"
+pacman = [
+  "git",
+  "npm",
+  "pass",
+]
+aur = [
+  "git-credential-manager-bin",
+]
+
+[docker]
+label = "Docker"
+pacman = [
+  "docker",
+  "docker-compose",
+  "docker-buildx",
+]
+aur = [
+  "lazydocker-bin",
+]
+
+[asus]
+label = "ASUS ROG"
+aur = [
+  "asusctl",
+  "rog-control-center",
+  "supergfxctl",
+]
+
+[msi]
+label = "MSI"
+aur = [
+  "msi-ec",
+  "mcontrolcenter-bin",
+]

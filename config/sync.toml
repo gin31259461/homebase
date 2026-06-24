@@ -1,0 +1,69 @@
+[git-shell]
+paths = [
+  "README.md",
+  ".dotfiles-repo",
+  "doc",
+  "assets",
+  ".local/bin/bootstrap.sh",
+  ".gitconfig",
+  ".gitattributes",
+  ".gitmodules",
+  ".gitignore",
+  ".editorconfig",
+  ".agents",
+  "AGENTS.md",
+]
+
+[homebase]
+paths = [
+  ".config/homebase",
+]
+
+[zsh]
+paths = [
+  ".zshrc",
+  ".zprofile",
+  ".p10k.zsh",
+]
+
+[gtk]
+paths = [
+  ".local/share/icons/Bibata-Modern-Ice",
+  ".config/gtk-3.0",
+  ".config/gtk-4.0",
+]
+
+[apps]
+paths = [
+  ".config/nvim",
+  ".config/kitty",
+  ".config/electron-flags.conf",
+  ".config/hypr",
+  ".config/Kvantum",
+  ".config/quickshell",
+  ".config/rofi",
+  ".config/btop",
+  ".config/fastfetch",
+  ".config/qt5ct",
+  ".config/qt6ct",
+  ".config/swappy",
+  ".config/vesktop/settings",
+  ".config/vesktop/themes",
+  ".config/vesktop/settings.json",
+  ".config/cava",
+  ".config/ghostty",
+  ".config/noctalia",
+  ".config/sunshine/sunshine.conf",
+  ".config/polychromatic/preferences.json",
+]
+
+[systemd-user]
+paths = [
+  ".config/systemd/user/sunshine.service.d",
+]
+
+[onedrive]
+paths = [
+  ".config/onedrive/config",
+  ".config/onedrive/sync_list",
+]

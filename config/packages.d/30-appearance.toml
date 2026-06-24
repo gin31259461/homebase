@@ -1,0 +1,48 @@
+[theming]
+label = "Themes"
+pacman = [
+  "kvantum",
+  "kvantum-qt5",
+  "qt5ct",
+  "qt6ct",
+  "qt6-5compat",
+  "nwg-look",
+  "nwg-displays",
+  "papirus-icon-theme",
+  "gtk-engine-murrine",
+  "adwaita-icon-theme",
+  "adwaita-cursors",
+  "adw-gtk-theme",
+]
+
+[fonts]
+label = "Fonts"
+pacman = [
+  "noto-fonts",
+  "noto-fonts-cjk",
+  "noto-fonts-emoji",
+  "otf-font-awesome",
+  "ttf-jetbrains-mono-nerd",
+  "ttf-firacode-nerd",
+  "ttf-fantasque-nerd",
+  "adobe-source-code-pro-fonts",
+  "ttf-droid",
+  "ttf-fira-code",
+  "ttf-jetbrains-mono",
+  "adwaita-fonts",
+  "inter-font",
+]
+aur = [
+  "ttf-victor-mono",
+  "noto-fonts-tc-vf",
+]
+
+[input]
+label = "Input Method (fcitx5)"
+pacman = [
+  "fcitx5",
+  "fcitx5-chewing",
+  "fcitx5-gtk",
+  "fcitx5-qt",
+  "fcitx5-configtool",
+]

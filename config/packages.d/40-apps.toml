@@ -1,0 +1,72 @@
+[utils]
+label = "Utilities"
+pacman = [
+  "btop",
+  "cava",
+  "brightnessctl",
+  "bc",
+  "jq",
+  "imagemagick",
+  "chafa",
+  "xdg-user-dirs",
+  "yad",
+  "rofi",
+  "xdotool",
+  "rsync",
+  "wget",
+  "unzip",
+  "pacman-contrib",
+  "qalculate-gtk",
+  "nvtop",
+  "yt-dlp",
+  "baobab",
+  "inxi",
+  "power-profiles-daemon",
+]
+aur = [
+  "octopi",
+]
+
+[sync]
+label = "Cloud Sync"
+aur = [
+  "onedrive-abraunegg",
+]
+
+[self-hosted]
+label = "Self-hosted & VPN"
+pacman = [
+  "tailscale",
+]
+aur = [
+  "sunshine",
+]
+
+[apps]
+label = "Applications"
+pacman = [
+  "obsidian",
+  "remmina",
+  "vlc",
+  "loupe",
+]
+aur = [
+  "vesktop-bin",
+  "zen-browser-bin",
+  "onlyoffice-bin",
+]
+
+[neovim]
+label = "Neovim Editor"
+pacman = [
+  "lazygit",
+  "neovim",
+]
+
+[noctalia]
+label = "Noctalia Shell"
+aur = [
+  "noctalia-shell",
+  "noctalia-qs",
+  "quickshell-overview-git",
+]
