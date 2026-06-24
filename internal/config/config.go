@@ -79,9 +79,6 @@ func EnsureForPlatform(platformID string, force bool) error {
 	}
 	src := filepath.Join(Expand("~/.local/lib/homebase/config/platforms"), platformID)
 	dst := PlatformConfigDir(platformID)
-	if !force && platformConfigReady(platformID) {
-		return nil
-	}
 	if _, err := os.Stat(src); err != nil {
 		return fmt.Errorf("default config for platform %q not found at %s", platformID, src)
 	}
@@ -117,22 +114,6 @@ func copyFile(src, dst string, force bool) error {
 		return err
 	}
 	return os.WriteFile(dst, data, 0o644)
-}
-
-func platformConfigReady(platformID string) bool {
-	dir := PlatformConfigDir(platformID)
-	required := []string{
-		filepath.Join(dir, "config.toml"),
-		filepath.Join(dir, "packages.d"),
-		filepath.Join(dir, "cleanup.toml"),
-		filepath.Join(dir, "sync.toml"),
-	}
-	for _, path := range required {
-		if _, err := os.Stat(path); err != nil {
-			return false
-		}
-	}
-	return true
 }
 
 func LoadGlobal() (Global, error) {

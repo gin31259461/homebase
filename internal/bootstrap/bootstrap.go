@@ -124,7 +124,7 @@ func deployDotfiles(r run.Runner, cfg config.App, platformID, sshRepo, httpsRepo
 	}
 
 	cloneURL := sshRepo
-	if strings.HasPrefix(sshRepo, "git@github.com:") && !gitutil.GitHubSSHAvailable(r) && httpsRepo != "" {
+	if strings.HasPrefix(sshRepo, "git@github.com:") && !gitutil.RemoteHeadAvailable(r, sshRepo) && httpsRepo != "" {
 		ui.Warn("No GitHub SSH access detected; cloning over HTTPS")
 		cloneURL = httpsRepo
 	}

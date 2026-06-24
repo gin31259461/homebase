@@ -16,22 +16,29 @@ func NumberedSelect(title string, items []SelectItem) ([]string, error) {
 		fmt.Printf("%2d.%s %-16s %s\n", i+1, marker, item.Key, item.Label)
 	}
 	text := PromptText("Select numbers, ranges, all, or enter for defaults", "")
+	return numberedSelectionKeys(text, items), nil
+}
+
+func numberedSelectionKeys(text string, items []SelectItem) []string {
 	if strings.TrimSpace(text) == "" {
-		return defaultSelectedKeys(items), nil
+		return defaultSelectedKeys(items)
 	}
 	if strings.EqualFold(strings.TrimSpace(text), "all") {
 		var keys []string
 		for _, item := range items {
 			keys = append(keys, item.Key)
 		}
-		return keys, nil
+		return keys
 	}
 	var keys []string
 	for _, token := range strings.Fields(strings.ReplaceAll(text, ",", " ")) {
 		if strings.Contains(token, "-") {
 			parts := strings.SplitN(token, "-", 2)
-			lo, _ := strconv.Atoi(parts[0])
-			hi, _ := strconv.Atoi(parts[1])
+			lo, loErr := strconv.Atoi(parts[0])
+			hi, hiErr := strconv.Atoi(parts[1])
+			if loErr != nil || hiErr != nil || lo > hi {
+				continue
+			}
 			for n := lo; n <= hi; n++ {
 				if n >= 1 && n <= len(items) {
 					keys = append(keys, items[n-1].Key)
@@ -44,7 +51,7 @@ func NumberedSelect(title string, items []SelectItem) ([]string, error) {
 			keys = append(keys, items[n-1].Key)
 		}
 	}
-	return keys, nil
+	return keys
 }
 
 func defaultSelectedKeys(items []SelectItem) []string {

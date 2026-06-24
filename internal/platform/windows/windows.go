@@ -288,7 +288,7 @@ func deployDotfiles(r run.Runner, cfg config.App, sshRepo, httpsRepo string) err
 		return rememberExistingRemote(r, cfg)
 	}
 	cloneURL := sshRepo
-	if strings.HasPrefix(sshRepo, "git@github.com:") && !gitHubRepoAvailable(r, sshRepo) && httpsRepo != "" {
+	if strings.HasPrefix(sshRepo, "git@github.com:") && !gitutil.RemoteHeadAvailable(r, sshRepo) && httpsRepo != "" {
 		ui.Warn("No GitHub SSH access detected; cloning over HTTPS")
 		cloneURL = httpsRepo
 	}
@@ -375,10 +375,6 @@ func copyTree(src, dst string) error {
 		}
 		return os.WriteFile(target, data, 0o644)
 	})
-}
-
-func gitHubRepoAvailable(r run.Runner, repo string) bool {
-	return r.Quiet("git", "ls-remote", "--exit-code", repo, "HEAD") == nil
 }
 
 func packageItems(groups []config.PackageGroup) []ui.SelectItem {

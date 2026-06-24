@@ -1,9 +1,12 @@
 package gitutil
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/gin31259461/homebase/internal/testutil"
 )
 
 func TestNormalizeRepo(t *testing.T) {
@@ -63,5 +66,20 @@ func TestRepoMemoryPlainTextAndTOML(t *testing.T) {
 	}
 	if mem.Repo != "git@github.com:user/repo.git" || mem.Branch != "main" {
 		t.Fatalf("toml memory = %#v", mem)
+	}
+}
+
+func TestRemoteHeadAvailable(t *testing.T) {
+	repo := "git@github.com:user/repo.git"
+	if !RemoteHeadAvailable(&testutil.Runner{}, repo) {
+		t.Fatal("expected available repo when runner command succeeds")
+	}
+	r := &testutil.Runner{
+		Errors: map[string]error{
+			"git -c core.sshCommand=ssh -o BatchMode=yes -o ConnectTimeout=5 ls-remote --exit-code git@github.com:user/repo.git HEAD": errors.New("unavailable"),
+		},
+	}
+	if RemoteHeadAvailable(r, repo) {
+		t.Fatal("expected unavailable repo when runner command fails")
 	}
 }

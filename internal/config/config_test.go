@@ -170,6 +170,31 @@ label = "Core"
 	assertFileContent(t, filepath.Join(home, ".config", "homebase", "platforms", "archlinux", "config.toml"), `custom = true`)
 }
 
+func TestEnsureForPlatformCopiesMissingDefaultFilesWithoutForce(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	defaults := filepath.Join(home, ".local", "lib", "homebase", "config")
+	writeFile(t, filepath.Join(defaults, "homebase.toml"), `active_platform = "auto"`)
+	writeFile(t, filepath.Join(defaults, "platforms", "archlinux", "config.toml"), `default = true`)
+	writeFile(t, filepath.Join(defaults, "platforms", "archlinux", "cleanup.toml"), `default cleanup`)
+	writeFile(t, filepath.Join(defaults, "platforms", "archlinux", "sync.toml"), `default sync`)
+	writeFile(t, filepath.Join(defaults, "platforms", "archlinux", "packages.d", "base.toml"), `[core]
+label = "Core"
+`)
+	writeFile(t, filepath.Join(home, ".config", "homebase", "platforms", "archlinux", "config.toml"), `custom = true`)
+	if err := os.MkdirAll(filepath.Join(home, ".config", "homebase", "platforms", "archlinux", "packages.d"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := EnsureForPlatform("archlinux", false); err != nil {
+		t.Fatal(err)
+	}
+	assertFileContent(t, filepath.Join(home, ".config", "homebase", "platforms", "archlinux", "config.toml"), `custom = true`)
+	assertFileContent(t, filepath.Join(home, ".config", "homebase", "platforms", "archlinux", "packages.d", "base.toml"), `[core]
+label = "Core"
+`)
+}
+
 func TestEnsureForPlatformOverwritesExistingConfigWithForce(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

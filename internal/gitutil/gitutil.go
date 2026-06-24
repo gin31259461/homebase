@@ -77,6 +77,10 @@ func SaveRepoMemory(path, repo, branch string) error {
 	return os.WriteFile(path, b, 0o644)
 }
 
-func GitHubSSHAvailable(r run.Runner) bool {
-	return r.Quiet("ssh", "-T", "git@github.com", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5") == nil
+func RemoteHeadAvailable(r run.Runner, repo string) bool {
+	return r.Quiet(
+		"git",
+		"-c", "core.sshCommand=ssh -o BatchMode=yes -o ConnectTimeout=5",
+		"ls-remote", "--exit-code", repo, "HEAD",
+	) == nil
 }

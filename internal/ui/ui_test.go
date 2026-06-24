@@ -47,6 +47,26 @@ func TestSelectorDefaultsSelected(t *testing.T) {
 	}
 }
 
+func TestNumberedSelectionKeys(t *testing.T) {
+	items := []SelectItem{
+		{Key: "core", DefaultSelected: true},
+		{Key: "dev"},
+		{Key: "apps"},
+	}
+	got := numberedSelectionKeys("", items)
+	if len(got) != 1 || got[0] != "core" {
+		t.Fatalf("defaults = %#v; want [core]", got)
+	}
+	got = numberedSelectionKeys("1, 2-3", items)
+	if strings.Join(got, ",") != "core,dev,apps" {
+		t.Fatalf("range selection = %#v; want all keys", got)
+	}
+	got = numberedSelectionKeys("x-3 -1 3-2 2", items)
+	if len(got) != 1 || got[0] != "dev" {
+		t.Fatalf("malformed ranges selected unexpected keys: %#v", got)
+	}
+}
+
 func TestSelectorVimJumps(t *testing.T) {
 	model := NewSelector("test", []SelectItem{
 		{Key: "0"}, {Key: "1"}, {Key: "2"},

@@ -1,10 +1,14 @@
 package install
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/gin31259461/homebase/internal/config"
+	"github.com/gin31259461/homebase/internal/testutil"
 	"github.com/gin31259461/homebase/internal/ui"
 )
 
@@ -49,4 +53,80 @@ func TestPackageItemsExposeStateAndDefaults(t *testing.T) {
 	if items[1].State != ui.SelectStateBad {
 		t.Fatalf("dev state = %s; want bad", items[1].State)
 	}
+}
+
+func TestRunWithPlatformDoesNotRequireAURHelperWithoutAURPlan(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeInstallDefaults(t, home, `[package_manager]
+official = "pacman"
+aur = "homebase-missing-aur-helper"
+`, `[core]
+label = "Core"
+pacman = ["git"]
+`)
+	r := &testutil.Runner{
+		Outputs: map[string]string{
+			"pacman -Qq": "git\n",
+		},
+	}
+	if err := RunWithPlatform([]string{"--group", "core", "--yes", "--no-setup"}, r, "archlinux"); err != nil {
+		t.Fatal(err)
+	}
+	for _, call := range r.Calls {
+		if strings.Contains(call, "homebase-missing-aur-helper") || strings.Contains(call, "aur.archlinux.org/yay.git") {
+			t.Fatalf("AUR helper should not be used without AUR packages, calls = %#v", r.Calls)
+		}
+	}
+}
+
+func TestRunWithPlatformRunsSetupAfterInstallingMissingPackage(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USER", "tester")
+	writeInstallDefaults(t, home, ``, `[docker]
+label = "Docker"
+pacman = ["docker"]
+`)
+	r := &testutil.Runner{
+		Outputs: map[string]string{
+			"pacman -Qq":    "",
+			"groups tester": "tester",
+		},
+	}
+	if err := RunWithPlatform([]string{"--group", "docker", "--yes"}, r, "archlinux"); err != nil {
+		t.Fatal(err)
+	}
+	if !hasCall(r.Calls, "sudo systemctl enable --now docker.service") {
+		t.Fatalf("docker setup did not run after package install, calls = %#v", r.Calls)
+	}
+}
+
+func writeInstallDefaults(t *testing.T, home, configTOML, packagesTOML string) {
+	t.Helper()
+	base := filepath.Join(home, ".local", "lib", "homebase", "config")
+	writeTestFile(t, filepath.Join(base, "homebase.toml"), `active_platform = "auto"`)
+	writeTestFile(t, filepath.Join(base, "platforms", "archlinux", "config.toml"), configTOML)
+	writeTestFile(t, filepath.Join(base, "platforms", "archlinux", "cleanup.toml"), ``)
+	writeTestFile(t, filepath.Join(base, "platforms", "archlinux", "sync.toml"), ``)
+	writeTestFile(t, filepath.Join(base, "platforms", "archlinux", "packages.d", "10-test.toml"), packagesTOML)
+}
+
+func writeTestFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func hasCall(calls []string, want string) bool {
+	for _, call := range calls {
+		if call == want {
+			return true
+		}
+	}
+	return false
 }

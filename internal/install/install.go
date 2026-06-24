@@ -50,9 +50,6 @@ func RunWithPlatform(args []string, r run.Runner, platformID string) error {
 	if err != nil {
 		return err
 	}
-	if err := ensureAURHelper(r, cfg.PackageManager.AUR); err != nil {
-		return err
-	}
 	var installed map[string]bool
 	if err := ui.WithSpinner("Scanning installed package database", func() error {
 		var err error
@@ -88,9 +85,15 @@ func RunWithPlatform(args []string, r run.Runner, platformID string) error {
 			ui.Warn("Aborted")
 			return nil
 		}
+		if len(aur) > 0 {
+			if err := ensureAURHelper(r, cfg.PackageManager.AUR); err != nil {
+				return err
+			}
+		}
 		if err := InstallPackages(r, official, aur, cfg.PackageManager); err != nil {
 			return err
 		}
+		markInstalled(installed, official, aur)
 	}
 
 	if !*noSetup {
@@ -185,6 +188,17 @@ func InstallPackages(r run.Runner, official, aur []string, pm config.PackageMana
 		}
 	}
 	return nil
+}
+
+func markInstalled(installed map[string]bool, packageLists ...[]string) {
+	if installed == nil {
+		return
+	}
+	for _, packages := range packageLists {
+		for _, pkg := range packages {
+			installed[pkg] = true
+		}
+	}
 }
 
 func RunSetup(r run.Runner, groups []config.PackageGroup, selected []string, installed map[string]bool, yes bool) error {
