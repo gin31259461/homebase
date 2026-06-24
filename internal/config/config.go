@@ -12,10 +12,6 @@ import (
 )
 
 type App struct {
-	Homebase struct {
-		Repo string `toml:"repo"`
-		Dir  string `toml:"dir"`
-	} `toml:"homebase"`
 	Dotfiles struct {
 		SSHRepo    string `toml:"ssh_repo"`
 		HTTPSRepo  string `toml:"https_repo"`
@@ -27,6 +23,11 @@ type App struct {
 	Bootstrap      struct {
 		Basics []string `toml:"basics"`
 	} `toml:"bootstrap"`
+}
+
+type Global struct {
+	ActivePlatform  string            `toml:"active_platform"`
+	PlatformAliases map[string]string `toml:"platform_aliases"`
 }
 
 type PackageManager struct {
@@ -56,11 +57,7 @@ type syncGroup struct {
 func Ensure(force bool) error {
 	src := Expand("~/.local/lib/homebase/config")
 	dst := Expand("~/.config/homebase")
-	empty := true
-	if entries, err := os.ReadDir(dst); err == nil && len(entries) > 0 {
-		empty = false
-	}
-	if !force && !empty {
+	if !force && configReady(dst) {
 		return nil
 	}
 	if _, err := os.Stat(src); err != nil {
@@ -101,16 +98,49 @@ func Ensure(force bool) error {
 	})
 }
 
-func Load() (App, error) {
-	var cfg App
-	b, err := os.ReadFile(Expand("~/.config/homebase/config.toml"))
+func configReady(dir string) bool {
+	required := []string{
+		filepath.Join(dir, "homebase.toml"),
+		filepath.Join(dir, "platforms", "archlinux", "config.toml"),
+		filepath.Join(dir, "platforms", "archlinux", "packages.d"),
+		filepath.Join(dir, "platforms", "archlinux", "cleanup.toml"),
+		filepath.Join(dir, "platforms", "archlinux", "sync.toml"),
+	}
+	for _, path := range required {
+		if _, err := os.Stat(path); err != nil {
+			return false
+		}
+	}
+	return true
+}
+
+func LoadGlobal() (Global, error) {
+	var cfg Global
+	b, err := os.ReadFile(Expand("~/.config/homebase/homebase.toml"))
 	if err != nil {
 		return cfg, err
 	}
 	if err := toml.Unmarshal(b, &cfg); err != nil {
 		return cfg, err
 	}
-	cfg.Homebase.Dir = Expand(defaultString(cfg.Homebase.Dir, "~/.local/lib/homebase"))
+	if strings.TrimSpace(cfg.ActivePlatform) == "" {
+		cfg.ActivePlatform = "auto"
+	}
+	if cfg.PlatformAliases == nil {
+		cfg.PlatformAliases = map[string]string{}
+	}
+	return cfg, nil
+}
+
+func LoadForPlatform(platformID string) (App, error) {
+	var cfg App
+	b, err := os.ReadFile(filepath.Join(PlatformConfigDir(platformID), "config.toml"))
+	if err != nil {
+		return cfg, err
+	}
+	if err := toml.Unmarshal(b, &cfg); err != nil {
+		return cfg, err
+	}
 	cfg.Dotfiles.Dir = Expand(defaultString(cfg.Dotfiles.Dir, "~/.dotfiles"))
 	cfg.Dotfiles.MemoryFile = Expand(defaultString(cfg.Dotfiles.MemoryFile, "~/.dotfiles-repo"))
 	cfg.Dotfiles.Branch = defaultString(cfg.Dotfiles.Branch, "main")
@@ -119,8 +149,8 @@ func Load() (App, error) {
 	return cfg, nil
 }
 
-func LoadPackageGroups() ([]PackageGroup, error) {
-	return LoadPackageGroupsFromDir(Expand("~/.config/homebase/packages.d"))
+func LoadPackageGroupsForPlatform(platformID string) ([]PackageGroup, error) {
+	return LoadPackageGroupsFromDir(filepath.Join(PlatformConfigDir(platformID), "packages.d"))
 }
 
 func LoadPackageGroupsFromDir(dir string) ([]PackageGroup, error) {
@@ -164,8 +194,8 @@ func LoadPackageGroupsFromDir(dir string) ([]PackageGroup, error) {
 	return groups, nil
 }
 
-func LoadCleanupTasks(commandExists func(string) bool) ([]CleanupTask, error) {
-	return LoadCleanupTasksFromFile(Expand("~/.config/homebase/cleanup.toml"), commandExists)
+func LoadCleanupTasksForPlatform(platformID string, commandExists func(string) bool) ([]CleanupTask, error) {
+	return LoadCleanupTasksFromFile(filepath.Join(PlatformConfigDir(platformID), "cleanup.toml"), commandExists)
 }
 
 func LoadCleanupTasksFromFile(path string, commandExists func(string) bool) ([]CleanupTask, error) {
@@ -194,8 +224,8 @@ func LoadCleanupTasksFromFile(path string, commandExists func(string) bool) ([]C
 	return tasks, nil
 }
 
-func LoadSyncPaths() ([]string, error) {
-	return LoadSyncPathsFromFile(Expand("~/.config/homebase/sync.toml"))
+func LoadSyncPathsForPlatform(platformID string) ([]string, error) {
+	return LoadSyncPathsFromFile(filepath.Join(PlatformConfigDir(platformID), "sync.toml"))
 }
 
 func LoadSyncPathsFromFile(path string) ([]string, error) {
@@ -243,6 +273,10 @@ func Expand(path string) string {
 		}
 	}
 	return os.ExpandEnv(path)
+}
+
+func PlatformConfigDir(platformID string) string {
+	return filepath.Join(Expand("~/.config/homebase/platforms"), platformID)
 }
 
 func defaultString(value, fallback string) string {

@@ -16,10 +16,10 @@ import (
 )
 
 func Run(args []string) error {
-	return RunWith(args, run.New())
+	return RunWithPlatform(args, run.New(), "archlinux")
 }
 
-func RunWith(args []string, r run.Runner) error {
+func RunWithPlatform(args []string, r run.Runner, platformID string) error {
 	fs := flag.NewFlagSet("bootstrap", flag.ContinueOnError)
 	yes := fs.Bool("yes", false, "accept defaults and skip prompts")
 	fs.BoolVar(yes, "y", false, "accept defaults and skip prompts")
@@ -29,13 +29,10 @@ func RunWith(args []string, r run.Runner) error {
 		return err
 	}
 
-	if err := system.RequireArch(); err != nil {
-		return err
-	}
 	if err := config.Ensure(false); err != nil {
 		return err
 	}
-	cfg, err := config.Load()
+	cfg, err := config.LoadForPlatform(platformID)
 	if err != nil {
 		return err
 	}
@@ -63,7 +60,7 @@ func RunWith(args []string, r run.Runner) error {
 		if *yes {
 			argv = append(argv, "--all", "--yes")
 		}
-		if err := install.RunWith(argv, r); err != nil {
+		if err := install.RunWithPlatform(argv, r, platformID); err != nil {
 			return err
 		}
 	} else {

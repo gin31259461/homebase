@@ -1,9 +1,9 @@
 # Homebase
 
-Homebase is a Go CLI for bootstrapping and maintaining an Arch Linux dotfiles
-environment. It builds one binary, `hb`, and uses TOML config plus an
-interactive Bubble Tea UI for package installation, cleanup, bootstrap, and
-dotfile sync workflows.
+Homebase is a Go CLI for bootstrapping and maintaining dotfiles environments.
+It builds one binary, `hb`, detects the active platform, and uses platform
+specific TOML config plus an interactive Bubble Tea UI for package
+installation, cleanup, bootstrap, and dotfile sync workflows.
 
 Homebase is separate from the dotfiles repository. The dotfiles repo keeps the
 small remote `bootstrap.sh` entrypoint, while Homebase owns the real setup and
@@ -11,27 +11,28 @@ maintenance logic.
 
 ## Features
 
-- Bootstrap an Arch Linux machine from a bare dotfiles repository
+- Bootstrap a machine from a platform-specific bare dotfiles repository
 - Build and install one binary at `~/.local/bin/hb`
 - Seed default config into `~/.config/homebase`
-- Install configured pacman and AUR package groups
-- Run post-install setup for SDDM, NetworkManager, dnsmasq, Docker, Razer,
-  Sunshine, and tty1 autologin
-- Clean common system caches and orphan packages
+- Activate command behavior from the detected platform
+- Install configured platform package groups
+- Run platform-specific setup tasks
+- Clean platform-specific system caches and package state
 - Stage, commit, and push configured dotfile paths through the bare git repo
 - Support interactive UI by default and automation flags for non-interactive runs
 
 ## Requirements
 
-- Arch Linux
+- Arch Linux or a compatible Arch-family platform
 - Go
 - Git
 - rsync
 - `base-devel`
 - `pacman`
 
-The default AUR helper is `yay`. If `yay` is missing, `hb install` builds it
-from the AUR.
+The current platform implementation is `archlinux`, shared by Arch Linux and
+similar systems such as Manjaro. The default AUR helper is `yay`. If `yay` is
+missing, `hb install` builds it from the AUR.
 
 ## Installation
 
@@ -40,6 +41,14 @@ The normal install path is through the dotfiles bootstrap script:
 ```bash
 repo_url="https://raw.githubusercontent.com/gin31259461/dotfiles-arch"
 bash <(curl -fsSL "$repo_url/main/.local/bin/bootstrap.sh")
+```
+
+Homebase also keeps platform-specific bootstrap scripts. The current
+Arch-family entrypoint is:
+
+```bash
+repo_url="https://raw.githubusercontent.com/gin31259461/homebase"
+bash <(curl -fsSL "$repo_url/main/bootstrap/archlinux.sh")
 ```
 
 The bootstrap script installs the minimum system dependencies, clones Homebase
@@ -104,9 +113,9 @@ hb bootstrap --repo youruser/dotfiles-arch --install
 
 Bootstrap behavior:
 
-1. Checks that the host is Arch Linux
+1. Detects the active platform
 2. Ensures Homebase config exists
-3. Installs bootstrap basics from `config.toml`
+3. Installs bootstrap basics from the active platform config
 4. Clones the dotfiles repo as a bare repo in `~/.dotfiles`
 5. Deploys files into `$HOME`
 6. Stores the selected dotfiles remote in `~/.dotfiles-repo`
@@ -141,13 +150,13 @@ hb install --group dev --yes --no-setup
 Package groups live in:
 
 ```text
-~/.config/homebase/packages.d/*.toml
+~/.config/homebase/platforms/archlinux/packages.d/*.toml
 ```
 
 Default package config is copied from:
 
 ```text
-~/.local/lib/homebase/config/packages.d/
+~/.local/lib/homebase/config/platforms/archlinux/packages.d/
 ```
 
 ## Cleanup
@@ -168,7 +177,7 @@ hb cleanup --all --yes
 Cleanup tasks are configured in:
 
 ```text
-~/.config/homebase/cleanup.toml
+~/.config/homebase/platforms/archlinux/cleanup.toml
 ```
 
 ## Sync Dotfiles
@@ -185,7 +194,7 @@ hb sync -m "chore: sync dotfiles" --no-push
 Tracked path groups are configured in:
 
 ```text
-~/.config/homebase/sync.toml
+~/.config/homebase/platforms/archlinux/sync.toml
 ```
 
 Homebase uses the same bare git layout as the `dot` alias:
@@ -200,14 +209,16 @@ Default config is stored in this repository:
 
 ```text
 config/
-|-- config.toml
-|-- cleanup.toml
-|-- sync.toml
-`-- packages.d/
+|-- homebase.toml
+`-- platforms/
+    `-- archlinux/
+        |-- config.toml
+        |-- cleanup.toml
+        |-- sync.toml
+        `-- packages.d/
 ```
 
-At runtime, Homebase copies defaults into `~/.config/homebase` when that
-directory is missing or empty.
+At runtime, Homebase copies missing defaults into `~/.config/homebase`.
 
 Force-copy the default config:
 
@@ -215,13 +226,19 @@ Force-copy the default config:
 hb config init
 ```
 
-Main settings live in `config.toml`:
+Global platform activation lives in `homebase.toml`:
 
 ```toml
-[homebase]
-repo = "https://github.com/gin31259461/homebase.git"
-dir = "~/.local/lib/homebase"
+active_platform = "auto"
 
+[platform_aliases]
+arch = "archlinux"
+manjaro = "archlinux"
+```
+
+Platform settings live under `platforms/<platform-id>/config.toml`:
+
+```toml
 [dotfiles]
 ssh_repo = "git@github.com:gin31259461/dotfiles-arch.git"
 https_repo = "https://github.com/gin31259461/dotfiles-arch.git"
@@ -233,6 +250,9 @@ memory_file = "~/.dotfiles-repo"
 official = "pacman"
 aur = "yay"
 ```
+
+Commands keep the same names across platforms. Homebase detects the platform
+and dispatches to that platform implementation internally.
 
 The dotfiles memory file supports TOML:
 
@@ -264,15 +284,17 @@ hb install --group __none__ --yes --no-setup
 ```text
 .
 |-- cmd/hb/              # thin CLI router
+|-- bootstrap/           # platform-specific shell/bootstrap entrypoints
 |-- internal/bootstrap/  # hb bootstrap
 |-- internal/cleanup/    # hb cleanup
 |-- internal/config/     # TOML loading and config seeding
 |-- internal/gitutil/    # bare git repo helpers and repo memory
 |-- internal/install/    # hb install and install planning
+|-- internal/platform/   # platform registry, detection, implementations
 |-- internal/run/        # command runner abstraction
 |-- internal/setup/      # post-install setup routines
 |-- internal/sync/       # hb sync
-|-- internal/system/     # Arch, pacman, systemd, and user helpers
+|-- internal/system/     # OS, package, service, and user helpers
 |-- internal/testutil/   # test fakes
 |-- internal/ui/         # Bubble Tea selector, prompts, spinner, styles
 |-- config/              # default runtime config
@@ -282,6 +304,12 @@ hb install --group __none__ --yes --no-setup
 
 The project intentionally produces one binary. Internal packages keep concerns
 separate without exposing a public Go API.
+
+Current platform implementations:
+
+```text
+internal/platform/archlinux/
+```
 
 ## Testing
 

@@ -21,10 +21,10 @@ func (s *stringList) Set(v string) error {
 }
 
 func Run(args []string) error {
-	return RunWith(args, run.New())
+	return RunWithPlatform(args, run.New(), "archlinux")
 }
 
-func RunWith(args []string, r run.Runner) error {
+func RunWithPlatform(args []string, r run.Runner, platformID string) error {
 	fs := flag.NewFlagSet("cleanup", flag.ContinueOnError)
 	yes := fs.Bool("yes", false, "skip confirmation")
 	fs.BoolVar(yes, "y", false, "skip confirmation")
@@ -37,7 +37,7 @@ func RunWith(args []string, r run.Runner) error {
 	if err := config.Ensure(false); err != nil {
 		return err
 	}
-	tasks, err := config.LoadCleanupTasks(system.CommandExists)
+	tasks, err := config.LoadCleanupTasksForPlatform(platformID, system.CommandExists)
 	if err != nil {
 		return err
 	}

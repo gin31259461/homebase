@@ -78,6 +78,30 @@ paths = ["one", "zero"]
 	}
 }
 
+func TestLoadGlobal(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".config", "homebase")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(dir, "homebase.toml"), `active_platform = "auto"
+
+[platform_aliases]
+arch = "archlinux"
+`)
+	global, err := LoadGlobal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if global.ActivePlatform != "auto" {
+		t.Fatalf("active platform = %q", global.ActivePlatform)
+	}
+	if global.PlatformAliases["arch"] != "archlinux" {
+		t.Fatalf("aliases = %#v", global.PlatformAliases)
+	}
+}
+
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {

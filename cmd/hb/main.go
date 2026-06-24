@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gin31259461/homebase/internal/bootstrap"
-	"github.com/gin31259461/homebase/internal/cleanup"
 	"github.com/gin31259461/homebase/internal/config"
-	"github.com/gin31259461/homebase/internal/install"
-	synccmd "github.com/gin31259461/homebase/internal/sync"
+	"github.com/gin31259461/homebase/internal/platform"
+	"github.com/gin31259461/homebase/internal/platform/archlinux"
 	"github.com/gin31259461/homebase/internal/ui"
 )
 
@@ -19,15 +17,25 @@ func main() {
 	}
 
 	var err error
+	var active platform.Platform
+	if os.Args[1] != "config" && os.Args[1] != "help" && os.Args[1] != "-h" && os.Args[1] != "--help" {
+		active, err = platform.Detect([]platform.Platform{
+			archlinux.New(),
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s %v\n", ui.WarnStyle.Render("error:"), err)
+			os.Exit(1)
+		}
+	}
 	switch os.Args[1] {
 	case "bootstrap":
-		err = bootstrap.Run(os.Args[2:])
+		err = active.Bootstrap(os.Args[2:])
 	case "install":
-		err = install.Run(os.Args[2:])
+		err = active.Install(os.Args[2:])
 	case "cleanup":
-		err = cleanup.Run(os.Args[2:])
+		err = active.Cleanup(os.Args[2:])
 	case "sync":
-		err = synccmd.Run(os.Args[2:])
+		err = active.Sync(os.Args[2:])
 	case "config":
 		err = runConfig(os.Args[2:])
 	case "help", "-h", "--help":
@@ -50,7 +58,7 @@ func runConfig(args []string) error {
 }
 
 func usage() {
-	fmt.Println(`hb - Homebase dotfile and Arch setup manager
+	fmt.Println(`hb - Homebase dotfile and platform setup manager
 
 Usage:
   hb bootstrap [--yes] [--repo <repo>] [--install]

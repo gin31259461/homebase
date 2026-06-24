@@ -24,10 +24,10 @@ func (s *stringList) Set(v string) error {
 }
 
 func Run(args []string) error {
-	return RunWith(args, run.New())
+	return RunWithPlatform(args, run.New(), "archlinux")
 }
 
-func RunWith(args []string, r run.Runner) error {
+func RunWithPlatform(args []string, r run.Runner, platformID string) error {
 	fs := flag.NewFlagSet("install", flag.ContinueOnError)
 	yes := fs.Bool("yes", false, "skip confirmation")
 	fs.BoolVar(yes, "y", false, "skip confirmation")
@@ -39,17 +39,14 @@ func RunWith(args []string, r run.Runner) error {
 		return err
 	}
 
-	if err := system.RequireArch(); err != nil {
-		return err
-	}
 	if err := config.Ensure(false); err != nil {
 		return err
 	}
-	cfg, err := config.Load()
+	cfg, err := config.LoadForPlatform(platformID)
 	if err != nil {
 		return err
 	}
-	groups, err := config.LoadPackageGroups()
+	groups, err := config.LoadPackageGroupsForPlatform(platformID)
 	if err != nil {
 		return err
 	}

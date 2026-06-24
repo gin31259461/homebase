@@ -12,10 +12,10 @@ import (
 )
 
 func Run(args []string) error {
-	return RunWith(args, run.New())
+	return RunWithPlatform(args, run.New(), "archlinux")
 }
 
-func RunWith(args []string, r run.Runner) error {
+func RunWithPlatform(args []string, r run.Runner, platformID string) error {
 	fs := flag.NewFlagSet("sync", flag.ContinueOnError)
 	msg := fs.String("m", "", "commit message")
 	noPush := fs.Bool("no-push", false, "commit without pushing")
@@ -25,11 +25,11 @@ func RunWith(args []string, r run.Runner) error {
 	if err := config.Ensure(false); err != nil {
 		return err
 	}
-	cfg, err := config.Load()
+	cfg, err := config.LoadForPlatform(platformID)
 	if err != nil {
 		return err
 	}
-	paths, err := config.LoadSyncPaths()
+	paths, err := config.LoadSyncPathsForPlatform(platformID)
 	if err != nil {
 		return err
 	}
