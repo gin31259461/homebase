@@ -72,5 +72,5 @@ Use this workflow for Homebase platform install and cleanup changes.
 - Run `go test ./...`, `go vet ./...`, and
   `go build -o ~/.local/bin/hb ./cmd/hb`.
 - If README or Markdown changes were made, run
-  `markdownlint-cli2 README.md AGENTS.md .agents/skills/homebase-platform-ui/SKILL.md`
+  `markdownlint-cli2 README.md`
   when available.

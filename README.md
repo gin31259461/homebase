@@ -385,7 +385,7 @@ gofmt -w cmd internal
 go test ./...
 go vet ./...
 go build -o ~/.local/bin/hb ./cmd/hb
-markdownlint-cli2 README.md AGENTS.md .agents/skills/homebase-platform-ui/SKILL.md
+markdownlint-cli2 README.md
 ```
 
 The Makefile wraps the same workflow:

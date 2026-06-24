@@ -69,7 +69,7 @@ go build -o ~/.local/bin/hb ./cmd/hb
 For README or Markdown changes, also run:
 
 ```bash
-markdownlint-cli2 README.md AGENTS.md .agents/skills/homebase-platform-ui/SKILL.md
+markdownlint-cli2 README.md
 ```
 
 Smoke-check the CLI when command routing changes:
