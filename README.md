@@ -191,6 +191,9 @@ hb sync -m "chore: sync dotfiles"
 hb sync -m "chore: sync dotfiles" --no-push
 ```
 
+When `hb sync` prompts for a commit message, pressing Enter on an empty input
+exits without staging, committing, or pushing.
+
 Tracked path groups are configured in:
 
 ```text

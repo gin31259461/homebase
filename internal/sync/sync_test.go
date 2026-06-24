@@ -44,6 +44,46 @@ label = "Core"
 	}
 }
 
+func TestResolveCommitMessage(t *testing.T) {
+	tests := []struct {
+		name      string
+		flagValue string
+		prompt    func() string
+		want      string
+		wantOK    bool
+	}{
+		{
+			name:      "uses flag value",
+			flagValue: " chore: sync ",
+			prompt:    func() string { return "ignored" },
+			want:      "chore: sync",
+			wantOK:    true,
+		},
+		{
+			name:      "uses prompt value",
+			flagValue: "",
+			prompt:    func() string { return " update config " },
+			want:      "update config",
+			wantOK:    true,
+		},
+		{
+			name:      "empty prompt aborts",
+			flagValue: "",
+			prompt:    func() string { return "" },
+			want:      "",
+			wantOK:    false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := resolveCommitMessage(tt.flagValue, tt.prompt)
+			if got != tt.want || ok != tt.wantOK {
+				t.Fatalf("resolveCommitMessage() = %q, %v; want %q, %v", got, ok, tt.want, tt.wantOK)
+			}
+		})
+	}
+}
+
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

@@ -36,8 +36,12 @@ func RunWithPlatform(args []string, r run.Runner, platformID string) error {
 	if len(paths) == 0 {
 		return errors.New("sync config has no paths")
 	}
-	if strings.TrimSpace(*msg) == "" {
-		*msg = ui.PromptText("Commit message", "sync dotfiles")
+	commitMessage, ok := resolveCommitMessage(*msg, func() string {
+		return ui.PromptText("Commit message", "")
+	})
+	if !ok {
+		ui.OK("No commit message provided; nothing changed")
+		return nil
 	}
 
 	ui.Section("Sync")
@@ -51,11 +55,11 @@ func RunWithPlatform(args []string, r run.Runner, platformID string) error {
 		ui.OK("No staged changes")
 		return nil
 	}
-	commitArgs := gitutil.DotArgs(cfg, "commit", "-m", *msg)
+	commitArgs := gitutil.DotArgs(cfg, "commit", "-m", commitMessage)
 	if err := r.RunIn(workTree, commitArgs[0], commitArgs[1:]...); err != nil {
 		return err
 	}
-	ui.OK("Committed: " + *msg)
+	ui.OK("Committed: " + commitMessage)
 	if !*noPush {
 		pushArgs := gitutil.DotArgs(cfg, "push", "origin", cfg.Dotfiles.Branch)
 		if err := r.RunIn(workTree, pushArgs[0], pushArgs[1:]...); err != nil {
@@ -64,4 +68,15 @@ func RunWithPlatform(args []string, r run.Runner, platformID string) error {
 		ui.OK("Pushed to origin " + cfg.Dotfiles.Branch)
 	}
 	return nil
+}
+
+func resolveCommitMessage(flagValue string, prompt func() string) (string, bool) {
+	message := strings.TrimSpace(flagValue)
+	if message == "" {
+		message = strings.TrimSpace(prompt())
+	}
+	if message == "" {
+		return "", false
+	}
+	return message, true
 }
