@@ -18,4 +18,7 @@ func TestWindowsBootstrapHasNoUTF8BOM(t *testing.T) {
 	if !bytes.HasPrefix(data, []byte("#Requires")) {
 		t.Fatalf("windows.ps1 must start with #Requires, got %q", data[:min(len(data), 16)])
 	}
+	if bytes.Contains(data, []byte("\n[CmdletBinding()]")) {
+		t.Fatal("windows.ps1 must not use a top-level CmdletBinding attribute; irm | iex can parse it incorrectly")
+	}
 }

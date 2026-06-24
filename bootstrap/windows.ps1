@@ -1,5 +1,4 @@
 #Requires -Version 5.1
-[CmdletBinding()]
 param(
   [string] $HomebaseRepo = 'https://github.com/gin31259461/homebase.git',
   [string] $Branch = 'main',
@@ -10,7 +9,11 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force -ErrorAction SilentlyContinue | Out-Null
+try {
+  Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force -ErrorAction Stop | Out-Null
+} catch {
+  # Policy may already be overridden by Process, MachinePolicy, or UserPolicy.
+}
 
 function Add-UserPath {
   param([Parameter(Mandatory)][string] $Path)
