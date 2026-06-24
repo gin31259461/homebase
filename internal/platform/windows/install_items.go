@@ -35,7 +35,15 @@ type installScan struct {
 }
 
 func packageItems(r run.Runner, groups []config.PackageGroup) []ui.SelectItem {
-	scan := scanWindowsInstallState(r, groups)
+	var scan installScan
+	if needsWingetScan(groups) || needsFeatureScan(groups) {
+		_ = ui.WithSpinner("Scanning Windows package state", func() error {
+			scan = scanWindowsInstallState(r, groups)
+			return nil
+		})
+	} else {
+		scan = scanWindowsInstallState(r, groups)
+	}
 	items := make([]ui.SelectItem, 0, len(groups))
 	for _, group := range groups {
 		info := windowsInstallInfo(group, scan)

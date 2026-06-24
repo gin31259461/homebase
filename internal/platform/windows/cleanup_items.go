@@ -22,6 +22,17 @@ type cleanupItemInfo struct {
 }
 
 func cleanupItems(r run.Runner, tasks []config.CleanupTask) []ui.SelectItem {
+	var items []ui.SelectItem
+	if len(tasks) > 0 {
+		_ = ui.WithSpinner("Scanning Windows cleanup state", func() error {
+			items = buildCleanupItems(r, tasks)
+			return nil
+		})
+	}
+	return items
+}
+
+func buildCleanupItems(r run.Runner, tasks []config.CleanupTask) []ui.SelectItem {
 	items := make([]ui.SelectItem, 0, len(tasks))
 	for _, task := range tasks {
 		info := windowsCleanupInfo(r, task)
