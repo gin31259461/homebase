@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 [CmdletBinding()]
 param(
   [string] $HomebaseRepo = 'https://github.com/gin31259461/homebase.git',
