@@ -1,0 +1,8 @@
+[core]
+label = "Core Windows tooling"
+features = [
+  "scoop",
+  "powershell",
+  "psreadline",
+  "node-pnpm",
+]

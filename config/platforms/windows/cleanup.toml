@@ -1,0 +1,26 @@
+[scoop-cache]
+label = "Scoop package cache"
+detail = "scoop cache rm *"
+requires = "scoop"
+
+[temp-files]
+label = "Windows Temp folder"
+detail = "Remove files under %TEMP%"
+
+[npm-cache]
+label = "npm cache"
+detail = "npm cache clean --force"
+requires = "npm"
+
+[winget-cache]
+label = "WinGet download cache"
+detail = "DesktopAppInstaller LocalCache and %TEMP%\\WinGet"
+requires = "winget"
+
+[recycle-bin]
+label = "Recycle Bin"
+detail = "Clear-RecycleBin -Force"
+
+[thumbnail-cache]
+label = "Thumbnail cache"
+detail = "Explorer thumbcache_*.db files"

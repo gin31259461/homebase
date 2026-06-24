@@ -1,0 +1,6 @@
+[apps]
+label = "Desktop apps"
+winget = [
+  "Notion.Notion",
+  "Obsidian.Obsidian",
+]

@@ -1,0 +1,14 @@
+[dotfiles]
+ssh_repo = "git@github.com:gin31259461/dotfiles-win.git"
+https_repo = "https://github.com/gin31259461/dotfiles-win.git"
+dir = "~/.dotfiles"
+branch = "main"
+memory_file = "~/.dotfiles-repo"
+
+[package_manager]
+official = "winget"
+
+[bootstrap]
+basics = [
+  "git",
+]

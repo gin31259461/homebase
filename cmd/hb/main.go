@@ -7,6 +7,7 @@ import (
 	"github.com/gin31259461/homebase/internal/config"
 	"github.com/gin31259461/homebase/internal/platform"
 	"github.com/gin31259461/homebase/internal/platform/archlinux"
+	windowsplatform "github.com/gin31259461/homebase/internal/platform/windows"
 	"github.com/gin31259461/homebase/internal/ui"
 )
 
@@ -62,6 +63,7 @@ func runConfig(args []string) error {
 func availablePlatforms() []platform.Platform {
 	return []platform.Platform{
 		archlinux.New(),
+		windowsplatform.New(),
 	}
 }
 

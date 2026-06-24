@@ -23,16 +23,15 @@ maintenance logic.
 
 ## Requirements
 
-- Arch Linux or a compatible Arch-family platform
+- Arch Linux or a compatible Arch-family platform, or Windows
 - Go
 - Git
-- rsync
-- `base-devel`
-- `pacman`
+- Windows uses WinGet for the minimal bootstrap dependencies
 
-The current platform implementation is `archlinux`, shared by Arch Linux and
-similar systems such as Manjaro. The default AUR helper is `yay`. If `yay` is
-missing, `hb install` builds it from the AUR.
+Current platform implementations are `archlinux` and `windows`. The
+Arch-family implementation is shared by Arch Linux and similar systems such as
+Manjaro. The default AUR helper is `yay`. If `yay` is missing, `hb install`
+builds it from the AUR.
 
 ## Installation
 
@@ -44,11 +43,16 @@ bash <(curl -fsSL "$repo_url/main/.local/bin/bootstrap.sh")
 ```
 
 Homebase also keeps platform-specific bootstrap scripts. The current
-Arch-family entrypoint is:
+entrypoints are:
 
 ```bash
 repo_url="https://raw.githubusercontent.com/gin31259461/homebase"
 bash <(curl -fsSL "$repo_url/main/bootstrap/archlinux.sh")
+```
+
+```powershell
+$repoUrl = "https://raw.githubusercontent.com/gin31259461/homebase"
+irm "$repoUrl/main/bootstrap/windows.ps1" | iex
 ```
 
 The bootstrap script installs the minimum system dependencies, clones Homebase
@@ -150,13 +154,13 @@ hb install --group dev --yes --no-setup
 Package groups live in:
 
 ```text
-~/.config/homebase/platforms/archlinux/packages.d/*.toml
+~/.config/homebase/platforms/<platform>/packages.d/*.toml
 ```
 
 Default package config is copied from:
 
 ```text
-~/.local/lib/homebase/config/platforms/archlinux/packages.d/
+~/.local/lib/homebase/config/platforms/<platform>/packages.d/
 ```
 
 ## Cleanup
@@ -177,7 +181,7 @@ hb cleanup --all --yes
 Cleanup tasks are configured in:
 
 ```text
-~/.config/homebase/platforms/archlinux/cleanup.toml
+~/.config/homebase/platforms/<platform>/cleanup.toml
 ```
 
 ## Sync Dotfiles
@@ -197,7 +201,7 @@ exits without staging, committing, or pushing.
 Tracked path groups are configured in:
 
 ```text
-~/.config/homebase/platforms/archlinux/sync.toml
+~/.config/homebase/platforms/<platform>/sync.toml
 ```
 
 Homebase uses the same bare git layout as the `dot` alias:
@@ -214,7 +218,12 @@ Default config is stored in this repository:
 config/
 |-- homebase.toml
 `-- platforms/
-    `-- archlinux/
+    |-- archlinux/
+    |   |-- config.toml
+    |   |-- cleanup.toml
+    |   |-- sync.toml
+    |   `-- packages.d/
+    `-- windows/
         |-- config.toml
         |-- cleanup.toml
         |-- sync.toml
@@ -314,6 +323,7 @@ Current platform implementations:
 
 ```text
 internal/platform/archlinux/
+internal/platform/windows/
 ```
 
 ## Testing

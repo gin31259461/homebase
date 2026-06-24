@@ -1,0 +1,9 @@
+[cli]
+label = "CLI and terminal tools"
+winget = [
+  "Starship.Starship",
+  "Neovim.Neovim",
+  "BurntSushi.ripgrep.MSVC",
+  "wez.wezterm",
+  "DEVCOM.Lua",
+]

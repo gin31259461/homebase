@@ -1,0 +1,21 @@
+[setup]
+label = "Windows setup"
+features = [
+  "powershell-profile",
+  "wezterm-context-menu",
+]
+
+[fonts]
+label = "Fonts"
+scoop_buckets = [
+  "nerd-fonts",
+]
+scoop = [
+  "FiraCode-NF",
+]
+
+[classic-menu]
+label = "Windows 10 classic context menu"
+features = [
+  "win10-classic-menu",
+]

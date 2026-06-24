@@ -35,10 +35,15 @@ type PackageManager struct {
 }
 
 type PackageGroup struct {
-	Key    string
-	Label  string   `toml:"label"`
-	Pacman []string `toml:"pacman"`
-	AUR    []string `toml:"aur"`
+	Key          string
+	Label        string   `toml:"label"`
+	Pacman       []string `toml:"pacman"`
+	AUR          []string `toml:"aur"`
+	ScoopBuckets []string `toml:"scoop_buckets"`
+	Winget       []string `toml:"winget"`
+	Scoop        []string `toml:"scoop"`
+	PSModules    []string `toml:"psmodules"`
+	Features     []string `toml:"features"`
 }
 
 type CleanupTask struct {
@@ -277,16 +282,26 @@ func SyncPaths(raw map[string]syncGroup) []string {
 
 func Expand(path string) string {
 	if path == "~" {
-		if home, err := os.UserHomeDir(); err == nil {
+		if home := homeDir(); home != "" {
 			return home
 		}
 	}
 	if strings.HasPrefix(path, "~/") {
-		if home, err := os.UserHomeDir(); err == nil {
+		if home := homeDir(); home != "" {
 			return filepath.Join(home, strings.TrimPrefix(path, "~/"))
 		}
 	}
 	return os.ExpandEnv(path)
+}
+
+func homeDir() string {
+	if home := os.Getenv("HOME"); home != "" {
+		return home
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return home
+	}
+	return ""
 }
 
 func PlatformConfigDir(platformID string) string {
