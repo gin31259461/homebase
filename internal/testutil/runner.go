@@ -23,6 +23,10 @@ func (r *Runner) Quiet(name string, args ...string) error {
 	return r.record(name, args...)
 }
 
+func (r *Runner) QuietIn(dir, name string, args ...string) error {
+	return r.record("cd "+dir+" && "+name, args...)
+}
+
 func (r *Runner) Capture(name string, args ...string) (string, error) {
 	key := commandKey(name, args...)
 	r.Calls = append(r.Calls, key)

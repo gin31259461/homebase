@@ -41,23 +41,24 @@ func RunWithPlatform(args []string, r run.Runner, platformID string) error {
 	}
 
 	ui.Section("Sync")
+	workTree := config.Expand("~")
 	addArgs := append(gitutil.DotArgs(cfg, "add", "--all", "--"), paths...)
-	if err := r.Run(addArgs[0], addArgs[1:]...); err != nil {
+	if err := r.RunIn(workTree, addArgs[0], addArgs[1:]...); err != nil {
 		return err
 	}
 	diffArgs := gitutil.DotArgs(cfg, "diff", "--cached", "--quiet")
-	if err := r.Quiet(diffArgs[0], diffArgs[1:]...); err == nil {
+	if err := r.QuietIn(workTree, diffArgs[0], diffArgs[1:]...); err == nil {
 		ui.OK("No staged changes")
 		return nil
 	}
 	commitArgs := gitutil.DotArgs(cfg, "commit", "-m", *msg)
-	if err := r.Run(commitArgs[0], commitArgs[1:]...); err != nil {
+	if err := r.RunIn(workTree, commitArgs[0], commitArgs[1:]...); err != nil {
 		return err
 	}
 	ui.OK("Committed: " + *msg)
 	if !*noPush {
 		pushArgs := gitutil.DotArgs(cfg, "push", "origin", cfg.Dotfiles.Branch)
-		if err := r.Run(pushArgs[0], pushArgs[1:]...); err != nil {
+		if err := r.RunIn(workTree, pushArgs[0], pushArgs[1:]...); err != nil {
 			return err
 		}
 		ui.OK("Pushed to origin " + cfg.Dotfiles.Branch)

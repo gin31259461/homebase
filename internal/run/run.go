@@ -13,6 +13,7 @@ type Runner interface {
 	Run(name string, args ...string) error
 	RunIn(dir, name string, args ...string) error
 	Quiet(name string, args ...string) error
+	QuietIn(dir, name string, args ...string) error
 	Capture(name string, args ...string) (string, error)
 }
 
@@ -43,6 +44,14 @@ func (ExecRunner) RunIn(dir, name string, args ...string) error {
 
 func (ExecRunner) Quiet(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+	return cmd.Run()
+}
+
+func (ExecRunner) QuietIn(dir, name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
 	return cmd.Run()
