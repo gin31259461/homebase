@@ -73,7 +73,7 @@ func windowsCleanupInfo(r run.Runner, task config.CleanupTask) cleanupItemInfo {
 }
 
 func tempFilesCleanupInfo(r run.Runner) cleanupItemInfo {
-	path := os.TempDir()
+	path := windowsTempDir()
 	if commandExists(powerShellExe()) {
 		out, err := r.Capture(powerShellExe(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", tempFilesSizeCommand())
 		if err == nil {
@@ -173,10 +173,20 @@ func wingetCachePaths() []string {
 	if local := os.Getenv("LOCALAPPDATA"); local != "" {
 		paths = append(paths, filepath.Join(local, "Packages", "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe", "LocalCache"))
 	}
-	if temp := os.TempDir(); temp != "" {
+	if temp := windowsTempDir(); temp != "" {
 		paths = append(paths, filepath.Join(temp, "WinGet"))
 	}
 	return paths
+}
+
+func windowsTempDir() string {
+	if temp := os.Getenv("TEMP"); temp != "" {
+		return temp
+	}
+	if temp := os.Getenv("TMP"); temp != "" {
+		return temp
+	}
+	return os.TempDir()
 }
 
 func thumbnailCleanupInfo() cleanupItemInfo {
