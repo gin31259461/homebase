@@ -218,9 +218,11 @@ config/
         `-- packages.d/
 ```
 
-At runtime, Homebase copies missing defaults into `~/.config/homebase`.
+At runtime, Homebase copies `homebase.toml` plus the detected or configured
+platform's defaults into `~/.config/homebase`. It does not copy every platform
+directory by default.
 
-Force-copy the default config:
+Force-copy global config plus the active platform config:
 
 ```bash
 hb config init

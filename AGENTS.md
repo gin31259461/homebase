@@ -31,6 +31,7 @@ dispatches commands to platform-specific code.
 - Preserve current CLI flags unless the user asks for a breaking change
 - Prefer small package-level helpers over large cross-package abstractions
 - Keep config schema changes deliberate and update defaults plus README together
+- Config seeding should copy global config plus the active platform only
 - Keep platform-specific behavior under `internal/platform/<id>` when possible
 - Use the runner abstraction for code that shells out
 - Do not run package install, cleanup, sudo, or bootstrap side effects in tests

@@ -19,9 +19,7 @@ func main() {
 	var err error
 	var active platform.Platform
 	if os.Args[1] != "config" && os.Args[1] != "help" && os.Args[1] != "-h" && os.Args[1] != "--help" {
-		active, err = platform.Detect([]platform.Platform{
-			archlinux.New(),
-		})
+		active, err = platform.Detect(availablePlatforms())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s %v\n", ui.WarnStyle.Render("error:"), err)
 			os.Exit(1)
@@ -54,7 +52,17 @@ func runConfig(args []string) error {
 	if len(args) != 1 || args[0] != "init" {
 		return fmt.Errorf("usage: hb config init")
 	}
-	return config.Ensure(true)
+	active, err := platform.Detect(availablePlatforms())
+	if err != nil {
+		return err
+	}
+	return config.EnsureForPlatform(active.ID(), true)
+}
+
+func availablePlatforms() []platform.Platform {
+	return []platform.Platform{
+		archlinux.New(),
+	}
 }
 
 func usage() {

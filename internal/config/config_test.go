@@ -102,8 +102,38 @@ arch = "archlinux"
 	}
 }
 
+func TestEnsureForPlatformCopiesOnlySelectedPlatform(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	defaults := filepath.Join(home, ".local", "lib", "homebase", "config")
+	writeFile(t, filepath.Join(defaults, "homebase.toml"), `active_platform = "auto"`)
+	writeFile(t, filepath.Join(defaults, "platforms", "archlinux", "config.toml"), `[dotfiles]`)
+	writeFile(t, filepath.Join(defaults, "platforms", "archlinux", "cleanup.toml"), ``)
+	writeFile(t, filepath.Join(defaults, "platforms", "archlinux", "sync.toml"), ``)
+	writeFile(t, filepath.Join(defaults, "platforms", "archlinux", "packages.d", "base.toml"), `[core]
+label = "Core"
+`)
+	writeFile(t, filepath.Join(defaults, "platforms", "windows", "config.toml"), `[dotfiles]`)
+
+	if err := EnsureForPlatform("archlinux", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".config", "homebase", "homebase.toml")); err != nil {
+		t.Fatalf("global config was not copied: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".config", "homebase", "platforms", "archlinux", "config.toml")); err != nil {
+		t.Fatalf("archlinux config was not copied: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".config", "homebase", "platforms", "windows", "config.toml")); !os.IsNotExist(err) {
+		t.Fatalf("windows config should not be copied, stat err = %v", err)
+	}
+}
+
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}

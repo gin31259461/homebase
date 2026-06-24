@@ -22,7 +22,7 @@ func RunWithPlatform(args []string, r run.Runner, platformID string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if err := config.Ensure(false); err != nil {
+	if err := config.EnsureForPlatform(platformID, false); err != nil {
 		return err
 	}
 	cfg, err := config.LoadForPlatform(platformID)

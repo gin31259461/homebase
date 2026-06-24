@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -55,14 +54,34 @@ type syncGroup struct {
 }
 
 func Ensure(force bool) error {
-	src := Expand("~/.local/lib/homebase/config")
-	dst := Expand("~/.config/homebase")
-	if !force && configReady(dst) {
+	return EnsureForPlatform("archlinux", force)
+}
+
+func EnsureGlobal(force bool) error {
+	src := Expand("~/.local/lib/homebase/config/homebase.toml")
+	dst := Expand("~/.config/homebase/homebase.toml")
+	if _, err := os.Stat(src); err != nil {
+		return fmt.Errorf("default global config not found at %s", src)
+	}
+	return copyFile(src, dst, force)
+}
+
+func EnsureForPlatform(platformID string, force bool) error {
+	if err := EnsureGlobal(force); err != nil {
+		return err
+	}
+	src := filepath.Join(Expand("~/.local/lib/homebase/config/platforms"), platformID)
+	dst := PlatformConfigDir(platformID)
+	if !force && platformConfigReady(platformID) {
 		return nil
 	}
 	if _, err := os.Stat(src); err != nil {
-		return fmt.Errorf("default config not found at %s", src)
+		return fmt.Errorf("default config for platform %q not found at %s", platformID, src)
 	}
+	return copyTree(src, dst, force)
+}
+
+func copyTree(src, dst string, force bool) error {
 	return filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -75,36 +94,31 @@ func Ensure(force bool) error {
 		if d.IsDir() {
 			return os.MkdirAll(target, 0o755)
 		}
-		if _, err := os.Stat(target); err == nil && !force {
-			return nil
-		}
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return err
-		}
-		in, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer in.Close()
-		out, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
-		if err != nil {
-			return err
-		}
-		if _, err := io.Copy(out, in); err != nil {
-			out.Close()
-			return err
-		}
-		return out.Close()
+		return copyFile(path, target, force)
 	})
 }
 
-func configReady(dir string) bool {
+func copyFile(src, dst string, force bool) error {
+	if _, err := os.Stat(dst); err == nil && !force {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, data, 0o644)
+}
+
+func platformConfigReady(platformID string) bool {
+	dir := PlatformConfigDir(platformID)
 	required := []string{
-		filepath.Join(dir, "homebase.toml"),
-		filepath.Join(dir, "platforms", "archlinux", "config.toml"),
-		filepath.Join(dir, "platforms", "archlinux", "packages.d"),
-		filepath.Join(dir, "platforms", "archlinux", "cleanup.toml"),
-		filepath.Join(dir, "platforms", "archlinux", "sync.toml"),
+		filepath.Join(dir, "config.toml"),
+		filepath.Join(dir, "packages.d"),
+		filepath.Join(dir, "cleanup.toml"),
+		filepath.Join(dir, "sync.toml"),
 	}
 	for _, path := range required {
 		if _, err := os.Stat(path); err != nil {

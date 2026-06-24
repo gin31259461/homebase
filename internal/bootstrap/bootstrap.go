@@ -29,7 +29,7 @@ func RunWithPlatform(args []string, r run.Runner, platformID string) error {
 		return err
 	}
 
-	if err := config.Ensure(false); err != nil {
+	if err := config.EnsureForPlatform(platformID, false); err != nil {
 		return err
 	}
 	cfg, err := config.LoadForPlatform(platformID)
@@ -46,7 +46,7 @@ func RunWithPlatform(args []string, r run.Runner, platformID string) error {
 	if err != nil {
 		return err
 	}
-	if err := deployDotfiles(r, cfg, effectiveSSH, effectiveHTTPS); err != nil {
+	if err := deployDotfiles(r, cfg, platformID, effectiveSSH, effectiveHTTPS); err != nil {
 		return err
 	}
 	if err := configureDotfiles(r, cfg); err != nil {
@@ -111,7 +111,7 @@ func resolveDotfilesRepo(cfg config.App, flagRepo string, interactive bool) (str
 	return sshRepo, httpsRepo, nil
 }
 
-func deployDotfiles(r run.Runner, cfg config.App, sshRepo, httpsRepo string) error {
+func deployDotfiles(r run.Runner, cfg config.App, platformID, sshRepo, httpsRepo string) error {
 	if _, err := os.Stat(cfg.Dotfiles.Dir); err == nil {
 		ui.OK("Bare dotfiles repo already present at " + cfg.Dotfiles.Dir)
 		if mem, err := gitutil.ReadRepoMemory(cfg.Dotfiles.MemoryFile); err != nil || mem.Repo == "" {
@@ -153,7 +153,7 @@ func deployDotfiles(r run.Runner, cfg config.App, sshRepo, httpsRepo string) err
 		}
 	}
 	ui.OK("Dotfiles deployed")
-	return config.Ensure(false)
+	return config.EnsureForPlatform(platformID, false)
 }
 
 func configureDotfiles(r run.Runner, cfg config.App) error {

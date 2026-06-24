@@ -17,7 +17,7 @@ type Platform interface {
 }
 
 func Detect(platforms []Platform) (Platform, error) {
-	if err := config.Ensure(false); err != nil {
+	if err := config.EnsureGlobal(false); err != nil {
 		return nil, err
 	}
 	global, err := config.LoadGlobal()
@@ -28,6 +28,9 @@ func Detect(platforms []Platform) (Platform, error) {
 		id := ResolveAlias(global.ActivePlatform, global.PlatformAliases)
 		for _, p := range platforms {
 			if p.ID() == id || p.Family() == id {
+				if err := config.EnsureForPlatform(p.ID(), false); err != nil {
+					return nil, err
+				}
 				return p, nil
 			}
 		}
@@ -35,6 +38,9 @@ func Detect(platforms []Platform) (Platform, error) {
 	}
 	for _, p := range platforms {
 		if p.Matches() {
+			if err := config.EnsureForPlatform(p.ID(), false); err != nil {
+				return nil, err
+			}
 			return p, nil
 		}
 	}
