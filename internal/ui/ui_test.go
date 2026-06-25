@@ -125,12 +125,48 @@ func TestSelectorHighlightsDetailValueNotTitle(t *testing.T) {
 	}
 }
 
-func TestSelectorScrollbarUsesTrackAndSingleThumb(t *testing.T) {
+func TestSelectorScrollbarDynamicLength(t *testing.T) {
+	config := ScrollbarConfig{MinThumbRatio: 0.2, MaxThumbRatio: 1}
+
+	top := scrollbarGeometryFor(20, 10, 0, config)
+	if !top.visible || top.start != 0 || top.length != 2 {
+		t.Fatalf("top geometry = %#v; want visible start 0 length 2", top)
+	}
+
+	middle := scrollbarGeometryFor(20, 10, 5, config)
+	if !middle.visible || middle.start != 3 || middle.length != 5 {
+		t.Fatalf("middle geometry = %#v; want visible start 3 length 5", middle)
+	}
+
+	bottom := scrollbarGeometryFor(20, 10, 10, config)
+	if !bottom.visible || bottom.start != 8 || bottom.length != 2 {
+		t.Fatalf("bottom geometry = %#v; want visible start 8 length 2", bottom)
+	}
+}
+
+func TestSelectorScrollbarHiddenWhenContentFitsByDefault(t *testing.T) {
+	hidden := scrollbarGeometryFor(3, 10, 0, DefaultScrollbarConfig())
+	if hidden.visible {
+		t.Fatalf("default fitted-content scrollbar = %#v; want hidden", hidden)
+	}
+
+	shown := scrollbarGeometryFor(3, 10, 0, ScrollbarConfig{
+		ShowWhenContentFits: true,
+		MinThumbRatio:       0.25,
+		MaxThumbRatio:       1,
+	})
+	if !shown.visible || shown.start != 0 || shown.length != 10 {
+		t.Fatalf("configured fitted-content scrollbar = %#v; want full-height thumb", shown)
+	}
+}
+
+func TestSelectorScrollbarUsesTrackAndDynamicThumb(t *testing.T) {
 	model := NewSelector("test", []SelectItem{
 		{Key: "0"}, {Key: "1"}, {Key: "2"}, {Key: "3"}, {Key: "4"},
 		{Key: "5"}, {Key: "6"}, {Key: "7"}, {Key: "8"}, {Key: "9"},
 	})
 	model.height = 4
+	model.offset = 3
 	thumbs := 0
 	tracks := 0
 	for row := 0; row < model.visibleCount(); row++ {
@@ -142,11 +178,11 @@ func TestSelectorScrollbarUsesTrackAndSingleThumb(t *testing.T) {
 			tracks++
 		}
 	}
-	if thumbs != 1 {
-		t.Fatalf("scrollbar thumbs = %d; want 1", thumbs)
+	if thumbs != 2 {
+		t.Fatalf("scrollbar thumbs = %d; want 2", thumbs)
 	}
-	if tracks != model.visibleCount()-1 {
-		t.Fatalf("scrollbar tracks = %d; want %d", tracks, model.visibleCount()-1)
+	if tracks != model.visibleCount()-2 {
+		t.Fatalf("scrollbar tracks = %d; want %d", tracks, model.visibleCount()-2)
 	}
 }
 
@@ -169,6 +205,22 @@ func TestSelectorInspectCtrlScroll(t *testing.T) {
 	model = teaModel.(SelectorModel)
 	if model.inspectOffset != 0 {
 		t.Fatalf("inspect offset after ctrl+u = %d; want 0", model.inspectOffset)
+	}
+}
+
+func TestSelectorInspectUsesScrollbar(t *testing.T) {
+	model := NewSelector("test", []SelectItem{
+		{Key: "core", Inspect: strings.Join([]string{
+			"line 1", "line 2", "line 3", "line 4", "line 5", "line 6",
+			"line 7", "line 8", "line 9", "line 10", "line 11", "line 12",
+			"line 13", "line 14", "line 15", "line 16",
+		}, "\n")},
+	})
+	model.inspect = true
+	model.inspectOffset = 4
+	view := model.View()
+	if strings.Count(view, "|") == 0 || strings.Count(view, ":") == 0 {
+		t.Fatalf("inspect view lost scrollbar:\n%s", view)
 	}
 }
 

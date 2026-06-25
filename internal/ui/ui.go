@@ -3,6 +3,7 @@ package ui
 import (
 	"bufio"
 	"fmt"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -193,33 +194,43 @@ const (
 )
 
 type SelectorModel struct {
-	title         string
-	items         []SelectItem
-	cursor        int
-	offset        int
-	height        int
-	width         int
-	selected      map[int]bool
-	inspect       bool
-	inspectOffset int
-	pendingG      bool
-	quitting      bool
-	done          bool
+	title           string
+	items           []SelectItem
+	cursor          int
+	offset          int
+	height          int
+	width           int
+	selected        map[int]bool
+	inspect         bool
+	inspectOffset   int
+	pendingG        bool
+	quitting        bool
+	done            bool
+	scrollbarConfig ScrollbarConfig
+}
+
+type ScrollbarConfig struct {
+	ShowWhenContentFits bool
+	MinThumbRatio       float64
+	MaxThumbRatio       float64
 }
 
 const (
 	DefaultSelectorHeight = 10
 	DefaultSelectorWidth  = 96
 	InspectHeight         = 8
+	DefaultMinThumbRatio  = 0.25
+	DefaultMaxThumbRatio  = 1
 )
 
 func NewSelector(title string, items []SelectItem) SelectorModel {
 	m := SelectorModel{
-		title:    title,
-		items:    items,
-		height:   DefaultSelectorHeight,
-		width:    DefaultSelectorWidth,
-		selected: map[int]bool{},
+		title:           title,
+		items:           items,
+		height:          DefaultSelectorHeight,
+		width:           DefaultSelectorWidth,
+		selected:        map[int]bool{},
+		scrollbarConfig: DefaultScrollbarConfig(),
 	}
 	for i, item := range items {
 		if item.DefaultSelected {
@@ -227,6 +238,38 @@ func NewSelector(title string, items []SelectItem) SelectorModel {
 		}
 	}
 	return m
+}
+
+func NewSelectorWithScrollbar(title string, items []SelectItem, scrollbar ScrollbarConfig) SelectorModel {
+	m := NewSelector(title, items)
+	m.scrollbarConfig = scrollbar.normalized()
+	return m
+}
+
+func DefaultScrollbarConfig() ScrollbarConfig {
+	return ScrollbarConfig{
+		MinThumbRatio: DefaultMinThumbRatio,
+		MaxThumbRatio: DefaultMaxThumbRatio,
+	}
+}
+
+func (c ScrollbarConfig) normalized() ScrollbarConfig {
+	if c.MinThumbRatio <= 0 {
+		c.MinThumbRatio = DefaultMinThumbRatio
+	}
+	if c.MaxThumbRatio <= 0 {
+		c.MaxThumbRatio = DefaultMaxThumbRatio
+	}
+	if c.MinThumbRatio > 1 {
+		c.MinThumbRatio = 1
+	}
+	if c.MaxThumbRatio > 1 {
+		c.MaxThumbRatio = 1
+	}
+	if c.MinThumbRatio > c.MaxThumbRatio {
+		c.MinThumbRatio = c.MaxThumbRatio
+	}
+	return c
 }
 
 func (m SelectorModel) Init() tea.Cmd { return nil }
@@ -384,12 +427,22 @@ func (m SelectorModel) View() string {
 			if inspectEnd > len(lines) {
 				inspectEnd = len(lines)
 			}
-			for _, line := range lines[m.inspectOffset:inspectEnd] {
+			inspectLineWidth := contentWidth - 2
+			if inspectLineWidth < 1 {
+				inspectLineWidth = 1
+			}
+			for row, line := range lines[m.inspectOffset:inspectEnd] {
 				b.WriteString("  ")
-				b.WriteString(line)
+				b.WriteString(padRight(line, inspectLineWidth))
+				b.WriteString(" ")
+				b.WriteString(m.inspectScrollbar(row, InspectHeight, len(lines)))
 				b.WriteString("\n")
 			}
-			for i := inspectEnd - m.inspectOffset; i < InspectHeight; i++ {
+			for row := inspectEnd - m.inspectOffset; row < InspectHeight; row++ {
+				b.WriteString("  ")
+				b.WriteString(padRight("", inspectLineWidth))
+				b.WriteString(" ")
+				b.WriteString(m.inspectScrollbar(row, InspectHeight, len(lines)))
 				b.WriteString("\n")
 			}
 			if len(lines) > InspectHeight {
@@ -478,20 +531,96 @@ func commonPrefix(a, b string) string {
 }
 
 func (m SelectorModel) scrollbar(row, visible int) string {
-	total := len(m.items)
-	if total <= visible || visible <= 0 {
+	return renderScrollbar(row, scrollbarGeometryFor(len(m.items), visible, m.offset, m.scrollbarConfig))
+}
+
+func (m SelectorModel) inspectScrollbar(row, visible, total int) string {
+	return renderScrollbar(row, scrollbarGeometryFor(total, visible, m.inspectOffset, m.scrollbarConfig))
+}
+
+type scrollbarGeometry struct {
+	visible bool
+	start   int
+	length  int
+}
+
+func renderScrollbar(row int, geometry scrollbarGeometry) string {
+	if !geometry.visible {
 		return " "
 	}
-	maxThumbStart := visible - 1
-	maxOffset := total - visible
-	thumbRow := 0
-	if maxOffset > 0 {
-		thumbRow = m.offset * maxThumbStart / maxOffset
-	}
-	if row == thumbRow {
+	if row >= geometry.start && row < geometry.start+geometry.length {
 		return OKStyle.Render("|")
 	}
 	return DimStyle.Render(":")
+}
+
+func scrollbarGeometryFor(total, visible, offset int, config ScrollbarConfig) scrollbarGeometry {
+	if visible <= 0 {
+		return scrollbarGeometry{}
+	}
+	config = config.normalized()
+	if total <= visible {
+		if !config.ShowWhenContentFits {
+			return scrollbarGeometry{}
+		}
+		return scrollbarGeometry{visible: true, length: visible}
+	}
+
+	track := visible
+	minLength := ratioLength(track, config.MinThumbRatio, true)
+	maxLengthCap := ratioLength(track, config.MaxThumbRatio, false)
+	if maxLengthCap < minLength {
+		maxLengthCap = minLength
+	}
+	naturalLength := int(math.Ceil(float64(track) * float64(visible) / float64(total)))
+	if naturalLength < minLength {
+		naturalLength = minLength
+	}
+	if naturalLength > maxLengthCap {
+		naturalLength = maxLengthCap
+	}
+
+	maxOffset := total - visible
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > maxOffset {
+		offset = maxOffset
+	}
+	progress := float64(offset) / float64(maxOffset)
+	middleFactor := 1 - math.Abs(progress*2-1)
+	length := minLength + int(math.Round(float64(naturalLength-minLength)*middleFactor))
+	if length < minLength {
+		length = minLength
+	}
+	if length > naturalLength {
+		length = naturalLength
+	}
+
+	startRange := track - length
+	start := 0
+	if startRange > 0 {
+		start = int(math.Round(progress * float64(startRange)))
+	}
+	return scrollbarGeometry{visible: true, start: start, length: length}
+}
+
+func ratioLength(track int, ratio float64, roundUp bool) int {
+	if track <= 0 {
+		return 0
+	}
+	value := float64(track) * ratio
+	length := int(math.Floor(value))
+	if roundUp {
+		length = int(math.Ceil(value))
+	}
+	if length < 1 {
+		return 1
+	}
+	if length > track {
+		return track
+	}
+	return length
 }
 
 func (m SelectorModel) listContentWidth() int {
