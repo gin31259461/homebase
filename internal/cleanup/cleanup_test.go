@@ -57,6 +57,29 @@ func TestOrphanRemovalArgsUsePacmanConfirmation(t *testing.T) {
 	}
 }
 
+func TestOrphanCleanupTreatsEmptyPacmanFailureAsNoOrphans(t *testing.T) {
+	r := &testutil.Runner{
+		Errors: map[string]error{
+			"pacman -Qdtq": testutil.Err(),
+		},
+	}
+	info := orphanCleanupInfo(r)
+	if info.state != ui.SelectStateGood {
+		t.Fatalf("state = %s; want good", info.state)
+	}
+	if info.summary != "no orphaned packages" {
+		t.Fatalf("summary = %q; want no orphaned packages", info.summary)
+	}
+
+	pkgs, err := orphanPackages(r)
+	if err != nil {
+		t.Fatalf("orphanPackages returned error for empty pacman output: %v", err)
+	}
+	if len(pkgs) != 0 {
+		t.Fatalf("pkgs = %#v; want none", pkgs)
+	}
+}
+
 func TestDirCleanupInfoStates(t *testing.T) {
 	dir := t.TempDir()
 	r := &testutil.Runner{}
@@ -133,6 +156,81 @@ func TestPacmanCacheCleanupInfoShowsZeroWhenPaccacheHasNoCandidates(t *testing.T
 	}
 	if info.summary != "0 B reclaimable" {
 		t.Fatalf("summary = %q; want 0 B reclaimable", info.summary)
+	}
+}
+
+func TestJournalCleanupInfoShowsReclaimableOverVacuumTarget(t *testing.T) {
+	r := &testutil.Runner{
+		Outputs: map[string]string{
+			"journalctl --disk-usage": "Archived and active journals take up 150.0M in the file system.\n",
+		},
+	}
+	info := journalCleanupInfo(r)
+	if info.state != ui.SelectStateBad {
+		t.Fatalf("state = %s; want bad", info.state)
+	}
+	if info.summary != "50.0 MiB over 100.0 MiB target" {
+		t.Fatalf("summary = %q; want reclaimable over target", info.summary)
+	}
+	inspect := strings.Join(info.inspect, "\n")
+	if !strings.Contains(inspect, "Total journal usage: 150.0 MiB") || !strings.Contains(inspect, "Vacuum target: 100.0 MiB") {
+		t.Fatalf("inspect = %#v; want total and target", info.inspect)
+	}
+}
+
+func TestJournalCleanupInfoShowsZeroWhenUnderVacuumTarget(t *testing.T) {
+	r := &testutil.Runner{
+		Outputs: map[string]string{
+			"journalctl --disk-usage": "Archived and active journals take up 16.0M in the file system.\n",
+		},
+	}
+	info := journalCleanupInfo(r)
+	if info.state != ui.SelectStateGood {
+		t.Fatalf("state = %s; want good", info.state)
+	}
+	if info.summary != "0 B over 100.0 MiB target" {
+		t.Fatalf("summary = %q; want zero reclaimable", info.summary)
+	}
+}
+
+func TestRunJournalTaskUsesVacuumSizeTarget(t *testing.T) {
+	r := &testutil.Runner{}
+	if err := RunTask(r, "journal"); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(r.Calls, "\n"), "sudo journalctl --vacuum-size=100M"; got != want {
+		t.Fatalf("calls = %q; want %q", got, want)
+	}
+}
+
+func TestNPMCacheCleanupInfoScansActualCachePayload(t *testing.T) {
+	root := t.TempDir()
+	cache := filepath.Join(root, "_cacache")
+	if err := os.MkdirAll(cache, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cache, "payload"), make([]byte, 2048), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "_logs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "_logs", "debug.log"), make([]byte, 4096), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &testutil.Runner{
+		Outputs: map[string]string{
+			"npm config get cache": root + "\n",
+		},
+	}
+	info := npmCacheCleanupInfo(r)
+	if info.summary != "2.0 KiB" {
+		t.Fatalf("summary = %q; want _cacache size only", info.summary)
+	}
+	inspect := strings.Join(info.inspect, "\n")
+	if !strings.Contains(inspect, "npm content-addressable cache: 2.0 KiB") || !strings.Contains(inspect, "npm cache root: "+root) {
+		t.Fatalf("inspect = %#v; want _cacache path and root", info.inspect)
 	}
 }
 

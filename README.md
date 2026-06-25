@@ -234,7 +234,9 @@ yay cache, orphaned packages, journal cleanup, npm cache, and thumbnails.
 
 Arch pacman cache cleanup shows the amount reclaimable by `paccache -r`, not
 the full `/var/cache/pacman/pkg` size. Inspect details include the total cache
-size for context.
+size for context. Arch journal cleanup shows the amount over the 100 MiB
+vacuum target, and npm cache cleanup scans npm's `_cacache` payload rather than
+logs or other metadata under the npm cache root.
 
 Arch orphan cleanup is intentionally conservative. The selector inspect view
 shows the package count, installed size when known, review guidance, and the

@@ -14,12 +14,12 @@ sudo = true
 
 [journal]
 label = "Systemd journal"
-detail = "--vacuum-time=2weeks - discards logs older than 2 weeks"
+detail = "journalctl --vacuum-size=100M - keeps journal under 100 MiB"
 sudo = true
 
 [npm-cache]
 label = "npm cache"
-detail = "npm cache clean --force - ~/.npm"
+detail = "npm cache clean --force - npm _cacache"
 requires = "npm"
 
 [thumbnails]

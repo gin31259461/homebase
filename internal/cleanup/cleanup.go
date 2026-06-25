@@ -118,6 +118,7 @@ type cleanupItemInfo struct {
 }
 
 const smallCleanupBytes int64 = 10 * 1024 * 1024
+const journalVacuumTargetBytes int64 = 100 * 1024 * 1024
 
 func cleanupInfo(r run.Runner, task config.CleanupTask) cleanupItemInfo {
 	switch task.Key {
@@ -130,7 +131,7 @@ func cleanupInfo(r run.Runner, task config.CleanupTask) cleanupItemInfo {
 	case "journal":
 		return journalCleanupInfo(r)
 	case "npm-cache":
-		return dirCleanupInfo(r, config.Expand("~/.npm"), "npm cache")
+		return npmCacheCleanupInfo(r)
 	case "thumbnails":
 		return dirCleanupInfo(r, config.Expand("~/.cache/thumbnails"), "Thumbnail cache")
 	default:
@@ -201,6 +202,9 @@ func paccacheReclaimableSize(r run.Runner, path string) (int64, bool) {
 func orphanCleanupInfo(r run.Runner) cleanupItemInfo {
 	out, err := r.Capture("pacman", "-Qdtq")
 	if err != nil {
+		if strings.TrimSpace(out) == "" {
+			return noOrphanCleanupInfo()
+		}
 		return cleanupItemInfo{
 			state:   ui.SelectStateUnknown,
 			summary: "orphan count unknown",
@@ -209,11 +213,7 @@ func orphanCleanupInfo(r run.Runner) cleanupItemInfo {
 	}
 	pkgs := strings.Fields(out)
 	if len(pkgs) == 0 {
-		return cleanupItemInfo{
-			state:   ui.SelectStateGood,
-			summary: "no orphaned packages",
-			inspect: []string{"pacman -Qdtq returned no packages."},
-		}
+		return noOrphanCleanupInfo()
 	}
 	size, ok := packagesInstalledSize(r, pkgs)
 	summary := fmt.Sprintf("%d orphaned package(s)", len(pkgs))
@@ -224,6 +224,14 @@ func orphanCleanupInfo(r run.Runner) cleanupItemInfo {
 		state:   ui.SelectStateBad,
 		summary: summary,
 		inspect: orphanInspect(pkgs, size, ok),
+	}
+}
+
+func noOrphanCleanupInfo() cleanupItemInfo {
+	return cleanupItemInfo{
+		state:   ui.SelectStateGood,
+		summary: "no orphaned packages",
+		inspect: []string{"pacman -Qdtq returned no packages."},
 	}
 }
 
@@ -238,11 +246,16 @@ func journalCleanupInfo(r run.Runner) cleanupItemInfo {
 		}
 	}
 	if bytes, ok := parseSize(text); ok {
-		state := cleanupSizeState(bytes)
+		reclaimable := journalReclaimableBytes(bytes)
+		state := cleanupSizeState(reclaimable)
 		return cleanupItemInfo{
 			state:   state,
-			summary: formatBytes(bytes),
-			inspect: []string{text},
+			summary: formatBytes(reclaimable) + " over " + formatBytes(journalVacuumTargetBytes) + " target",
+			inspect: []string{
+				"Total journal usage: " + formatBytes(bytes),
+				"Vacuum target: " + formatBytes(journalVacuumTargetBytes),
+				text,
+			},
 		}
 	}
 	return cleanupItemInfo{
@@ -250,6 +263,33 @@ func journalCleanupInfo(r run.Runner) cleanupItemInfo {
 		summary: text,
 		inspect: []string{text},
 	}
+}
+
+func journalReclaimableBytes(bytes int64) int64 {
+	reclaimable := bytes - journalVacuumTargetBytes
+	if reclaimable < 0 {
+		return 0
+	}
+	return reclaimable
+}
+
+func npmCacheCleanupInfo(r run.Runner) cleanupItemInfo {
+	root := npmCacheRoot(r)
+	path := filepath.Join(root, "_cacache")
+	info := dirCleanupInfo(r, path, "npm content-addressable cache")
+	info.inspect = append(info.inspect, "npm cache root: "+root)
+	return info
+}
+
+func npmCacheRoot(r run.Runner) string {
+	out, err := r.Capture("npm", "config", "get", "cache")
+	if err == nil {
+		root := strings.TrimSpace(out)
+		if root != "" && root != "undefined" && root != "null" {
+			return config.Expand(root)
+		}
+	}
+	return config.Expand("~/.npm")
 }
 
 func cleanupSizeState(bytes int64) ui.SelectState {
@@ -447,7 +487,7 @@ func RunTask(r run.Runner, key string) error {
 		}
 		return r.Run("sudo", orphanRemovalArgs(pkgs)...)
 	case "journal":
-		return r.Run("sudo", "journalctl", "--vacuum-time=2weeks")
+		return r.Run("sudo", "journalctl", "--vacuum-size=100M")
 	case "npm-cache":
 		return r.Run("npm", "cache", "clean", "--force")
 	case "thumbnails":
@@ -460,6 +500,9 @@ func RunTask(r run.Runner, key string) error {
 func orphanPackages(r run.Runner) ([]string, error) {
 	out, err := r.Capture("pacman", "-Qdtq")
 	if err != nil {
+		if strings.TrimSpace(out) == "" {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return strings.Fields(out), nil
