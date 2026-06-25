@@ -37,6 +37,8 @@ dispatches commands to platform-specific code.
 - Do not run package install, cleanup, sudo, or bootstrap side effects in tests
 - For install/cleanup UI or platform parity work, read:
   `.agents/skills/homebase-platform-ui/SKILL.md`
+- Do not let any file have a large amount of code, consider separating of concern
+- Complex tasks should ask the user questions to confirm the detailed requirements
 
 ## Testing
 

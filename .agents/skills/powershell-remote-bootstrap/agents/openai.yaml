@@ -1,4 +1,0 @@
-interface:
-  display_name: "PowerShell Remote Bootstrap"
-  short_description: "Guardrails for irm/iwr pipe iex bootstraps"
-  default_prompt: "Use $powershell-remote-bootstrap to update a Windows PowerShell bootstrap script that is run through irm or iwr piped to iex."
