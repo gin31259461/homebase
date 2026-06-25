@@ -138,6 +138,16 @@ func TestSelectorScrollbarDynamicLength(t *testing.T) {
 		t.Fatalf("middle geometry = %#v; want visible start 3 length 5", middle)
 	}
 
+	aboveMiddle := scrollbarGeometryFor(20, 10, 4, config)
+	if !aboveMiddle.visible || aboveMiddle.length != 5 {
+		t.Fatalf("above-middle geometry = %#v; want max length 5", aboveMiddle)
+	}
+
+	belowMiddle := scrollbarGeometryFor(20, 10, 6, config)
+	if !belowMiddle.visible || belowMiddle.length != 5 {
+		t.Fatalf("below-middle geometry = %#v; want max length 5", belowMiddle)
+	}
+
 	bottom := scrollbarGeometryFor(20, 10, 10, config)
 	if !bottom.visible || bottom.start != 8 || bottom.length != 2 {
 		t.Fatalf("bottom geometry = %#v; want visible start 8 length 2", bottom)
@@ -184,6 +194,51 @@ func TestSelectorScrollbarUsesTrackAndDynamicThumb(t *testing.T) {
 	if tracks != model.visibleCount()-2 {
 		t.Fatalf("scrollbar tracks = %d; want %d", tracks, model.visibleCount()-2)
 	}
+}
+
+func TestSelectorScrollbarTrackContinuesThroughDetailLines(t *testing.T) {
+	model := NewSelector("test", []SelectItem{
+		{Key: "0", Detail: "detail text without punctuation"},
+		{Key: "1"},
+		{Key: "2"},
+		{Key: "3"},
+	})
+	model.height = 2
+	view := model.View()
+	for _, line := range strings.Split(view, "\n") {
+		if !strings.Contains(line, "detail text") {
+			continue
+		}
+		if strings.Contains(line, ":") {
+			return
+		}
+		t.Fatalf("detail line has no scrollbar track:\n%s", view)
+	}
+	t.Fatalf("view lost detail line:\n%s", view)
+}
+
+func TestSelectorScrollbarThumbContinuesThroughDetailLines(t *testing.T) {
+	model := NewSelectorWithScrollbar("test", []SelectItem{
+		{Key: "0", Detail: "detail text without punctuation"},
+		{Key: "1"},
+		{Key: "2"},
+		{Key: "3"},
+	}, ScrollbarConfig{
+		MinThumbRatio: 1,
+		MaxThumbRatio: 1,
+	})
+	model.height = 2
+	view := model.View()
+	for _, line := range strings.Split(view, "\n") {
+		if !strings.Contains(line, "detail text") {
+			continue
+		}
+		if strings.Contains(line, "|") {
+			return
+		}
+		t.Fatalf("detail line split the scrollbar thumb:\n%s", view)
+	}
+	t.Fatalf("view lost detail line:\n%s", view)
 }
 
 func TestSelectorInspectCtrlScroll(t *testing.T) {
