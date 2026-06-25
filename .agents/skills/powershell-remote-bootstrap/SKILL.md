@@ -8,6 +8,19 @@ description: Use when editing, reviewing, or debugging Windows PowerShell bootst
 Use this workflow for PowerShell entrypoints intended to work both as local
 scripts and as remote one-liners such as `irm <url> | iex`.
 
+## Relevant Subagents
+
+- Use `powershell-5.1-expert` for `bootstrap/windows.ps1`, parser
+  compatibility, execution policy behavior, and fresh Windows bootstrap paths.
+- Use `powershell-7-expert` for post-bootstrap PowerShell 7 automation and
+  future Windows platform scripts that can assume `pwsh`.
+- Use `powershell-security-hardening` if it is installed when reviewing remote
+  script execution, downloaded code trust, or admin automation risk.
+- Use `test-automator` for parser-safety regression tests and bootstrap test
+  coverage that avoids side effects.
+- Use `reviewer` after changing remote bootstrap behavior, install flow,
+  environment mutation, or PATH handling.
+
 ## Script Shape
 
 - Keep `#Requires -Version 5.1` as the first bytes of the file and keep the

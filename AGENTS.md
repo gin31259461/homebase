@@ -40,6 +40,24 @@ dispatches commands to platform-specific code.
 - Do not let any file have a large amount of code, consider separating of concern
 - Complex tasks should ask the user questions to confirm the detailed requirements
 
+## Project subagents
+
+Project-local subagents live in `.codex/agents/`. Use them deliberately for
+focused work:
+
+- `golang-pro`: Go implementation in `cmd/hb` and `internal/*`
+- `cli-developer`: command flags, CLI UX, automation paths, and shell-facing
+  workflows
+- `powershell-5.1-expert`: Windows bootstrap compatibility and remote
+  `irm/iwr | iex` behavior
+- `powershell-7-expert`: PowerShell 7 post-bootstrap automation and future
+  Windows platform scripting
+- `test-automator`: targeted regression tests and fake-runner coverage
+- `reviewer`: PR-style correctness, regression, security, and test review
+- `code-mapper`: execution-flow and ownership mapping before broad changes
+- `documentation-engineer`: README, config, and operator workflow docs tied to
+  repository reality
+
 ## Testing
 
 Put unit tests next to the package they test:
