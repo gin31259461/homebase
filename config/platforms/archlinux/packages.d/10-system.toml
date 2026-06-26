@@ -32,7 +32,6 @@ pacman = [
   "eza",
   "bat",
   "git-delta",
-  "lsd",
 ]
 
 [terminal]

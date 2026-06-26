@@ -37,7 +37,7 @@ done
   exit 1
 }
 
-sudo pacman -S --needed --noconfirm git base-devel go rsync ca-certificates zsh
+sudo pacman -S --needed --noconfirm git base-devel go
 
 if [[ -d "$HOMEBASE_DIR/.git" ]]; then
   git -C "$HOMEBASE_DIR" pull --ff-only
@@ -51,4 +51,3 @@ fi
 mkdir -p "$HOME/.local/bin"
 go build -C "$HOMEBASE_DIR" -o "$HB_BIN" ./cmd/hb
 exec "$HB_BIN" bootstrap "${args[@]}"
-exec "$HB_BIN" install --group cli-tools --yes
