@@ -60,10 +60,6 @@ type syncGroup struct {
 	Paths []string `toml:"paths"`
 }
 
-func Ensure(force bool) error {
-	return EnsureForPlatform("archlinux", force)
-}
-
 func EnsureGlobal(force bool) error {
 	src := Expand("~/.local/lib/homebase/config/homebase.toml")
 	dst := Expand("~/.config/homebase/homebase.toml")
@@ -146,8 +142,6 @@ func LoadForPlatform(platformID string) (App, error) {
 	cfg.Dotfiles.Dir = Expand(defaultString(cfg.Dotfiles.Dir, "~/.dotfiles"))
 	cfg.Dotfiles.MemoryFile = Expand(defaultString(cfg.Dotfiles.MemoryFile, "~/.dotfiles-repo"))
 	cfg.Dotfiles.Branch = defaultString(cfg.Dotfiles.Branch, "main")
-	cfg.PackageManager.Official = defaultString(cfg.PackageManager.Official, "pacman")
-	cfg.PackageManager.AUR = defaultString(cfg.PackageManager.AUR, "yay")
 	return cfg, nil
 }
 

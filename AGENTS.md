@@ -9,8 +9,8 @@ dispatches commands to platform-specific code.
 - `cmd/hb/`: thin CLI router only
 - `bootstrap/`: platform-specific shell/bootstrap entrypoints
 - `internal/bootstrap/`: `hb bootstrap`
-- `internal/install/`: `hb install` and package planning
-- `internal/cleanup/`: `hb cleanup`
+- `internal/install/`: shared install selection helpers
+- `internal/cleanup/`: shared cleanup helpers
 - `internal/sync/`: `hb sync`
 - `internal/config/`: TOML loading and config seeding
 - `internal/platform/`: platform registry, detection, and implementations
@@ -18,7 +18,6 @@ dispatches commands to platform-specific code.
 - `internal/run/`: command runner abstraction
 - `internal/system/`: OS, package, service, and user helpers
 - `internal/gitutil/`: bare git and repo memory helpers
-- `internal/setup/`: post-install setup routines
 - `internal/testutil/`: test fakes
 - `config/`: default runtime config copied to `~/.config/homebase`
 - `config/platforms/<id>/`: platform-specific runtime config defaults
@@ -39,6 +38,41 @@ dispatches commands to platform-specific code.
   `.agents/skills/homebase-platform-ui/SKILL.md`
 - Do not let any file have a large amount of code, consider separating of concern
 - Complex tasks should ask the user questions to confirm the detailed requirements
+
+## Abstraction and ownership rules
+
+- Start from concrete ownership. Keep behavior in the package that owns the
+  domain decision, side effect, external command, file layout, or default value.
+  Extract only the part that is independent of that owner.
+- Prefer narrow, proven abstractions over broad category layers. Do not create a
+  shared layer just because code looks similar once; wait until at least two
+  real callers need the same contract.
+- Shared packages should contain policy-free helpers, data loading, parsing,
+  formatting, selection mechanics, runner interfaces, and other reusable
+  primitives. They should not assume a specific platform, package manager,
+  service manager, shell, filesystem layout, config directory, or workflow.
+- If shared orchestration needs owner-specific behavior, inject it as a small
+  hook or interface implemented by the owning package. Keep command arguments,
+  installation logic, cleanup logic, and OS-specific checks with that owner.
+- Defaults are ownership decisions. Apply defaults in the package that owns the
+  behavior, not in generic loaders or helpers where they may affect unrelated
+  callers.
+- Keep configuration isolated by the owner that consumes it. Global loaders may
+  parse fields used by multiple owners, but they should not silently apply one
+  owner's defaults to every consumer.
+- Avoid abstractions that require callers to know hidden ordering, magic keys,
+  or implicit side effects. Prefer explicit inputs, explicit selected keys, and
+  small data structures over cross-package global behavior.
+- Keep files focused by responsibility: command orchestration, item/status
+  construction, scanning, task execution, shell helpers, and tests should be
+  split when a file begins to mix those concerns.
+- Tests should follow ownership. Owner-specific behavior belongs in the owner
+  package's tests; shared package tests should cover only shared contracts and
+  reusable helpers.
+- Platform code is one example of these rules: `internal/platform/<id>` owns
+  package-manager behavior, installed-state scans, cleanup scanners/runners,
+  bootstrap package installation, setup hooks, shell commands, OS-specific
+  paths, and platform defaults.
 
 ## Project subagents
 

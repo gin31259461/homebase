@@ -122,6 +122,21 @@ arch = "archlinux"
 	}
 }
 
+func TestLoadForPlatformDoesNotDefaultPackageManager(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeFile(t, filepath.Join(home, ".config", "homebase", "platforms", "test", "config.toml"), `[dotfiles]
+dir = "~/.dots"
+`)
+	cfg, err := LoadForPlatform("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.PackageManager.Official != "" || cfg.PackageManager.AUR != "" {
+		t.Fatalf("package manager = %#v; want no platform-specific defaults", cfg.PackageManager)
+	}
+}
+
 func TestEnsureForPlatformCopiesOnlySelectedPlatform(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

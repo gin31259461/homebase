@@ -413,13 +413,12 @@ hb install --group __none__ --yes --no-setup
 |-- bootstrap/           # platform bootstrap entrypoints
 |-- config/              # default runtime config
 |-- internal/bootstrap/  # shared bootstrap flow
-|-- internal/cleanup/    # shared Arch cleanup flow
+|-- internal/cleanup/    # shared cleanup helpers
 |-- internal/config/     # TOML loading and config seeding
 |-- internal/gitutil/    # bare Git repo helpers
-|-- internal/install/    # shared Arch install planning
+|-- internal/install/    # shared install selection helpers
 |-- internal/platform/   # platform registry and implementations
 |-- internal/run/        # command runner abstraction
-|-- internal/setup/      # post-install setup routines
 |-- internal/sync/       # dotfiles sync command
 |-- internal/system/     # OS and command helpers
 |-- internal/testutil/   # test fakes

@@ -1,4 +1,4 @@
-package install
+package archlinux
 
 import (
 	"os"
@@ -18,7 +18,7 @@ func TestInstallPlanDedupesAndSkipsInstalled(t *testing.T) {
 		{Key: "dev", Pacman: []string{"go", "make"}, AUR: []string{"yay-bin", "tool-bin"}},
 	}
 	installed := map[string]bool{"git": true}
-	official, aur := InstallPlan(groups, []string{"core", "dev"}, installed)
+	official, aur := installPlan(groups, []string{"core", "dev"}, installed)
 
 	if want := []string{"go", "make"}; !reflect.DeepEqual(official, want) {
 		t.Fatalf("official = %#v; want %#v", official, want)
@@ -28,19 +28,12 @@ func TestInstallPlanDedupesAndSkipsInstalled(t *testing.T) {
 	}
 }
 
-func TestUniqueKnown(t *testing.T) {
-	got := UniqueKnown([]string{"core", "missing", "core", "", "dev"}, map[string]bool{"core": true, "dev": true})
-	if want := []string{"core", "dev"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("UniqueKnown = %#v; want %#v", got, want)
-	}
-}
-
 func TestPackageItemsExposeStateAndDefaults(t *testing.T) {
 	groups := []config.PackageGroup{
 		{Key: "core", Label: "Core", Default: true, Pacman: []string{"git", "go"}},
 		{Key: "dev", Label: "Dev", Pacman: []string{"make"}},
 	}
-	items := PackageItems(groups, map[string]bool{"git": true})
+	items := packageItems(groups, map[string]bool{"git": true})
 	if !items[0].DefaultSelected {
 		t.Fatal("default package group was not preselected")
 	}
@@ -55,7 +48,14 @@ func TestPackageItemsExposeStateAndDefaults(t *testing.T) {
 	}
 }
 
-func TestRunWithPlatformDoesNotRequireAURHelperWithoutAURPlan(t *testing.T) {
+func TestArchPackageManagerDefaults(t *testing.T) {
+	pm := archPackageManager(config.PackageManager{})
+	if pm.Official != "pacman" || pm.AUR != "yay" {
+		t.Fatalf("archPackageManager = %#v; want pacman/yay", pm)
+	}
+}
+
+func TestRunInstallDoesNotRequireAURHelperWithoutAURPlan(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	writeInstallDefaults(t, home, `[package_manager]
@@ -70,7 +70,7 @@ pacman = ["git"]
 			"pacman -Qq": "git\n",
 		},
 	}
-	if err := RunWithPlatform([]string{"--group", "core", "--yes", "--no-setup"}, r, "archlinux"); err != nil {
+	if err := runInstall([]string{"--group", "core", "--yes", "--no-setup"}, r); err != nil {
 		t.Fatal(err)
 	}
 	for _, call := range r.Calls {
@@ -80,7 +80,7 @@ pacman = ["git"]
 	}
 }
 
-func TestRunWithPlatformRunsSetupAfterInstallingMissingPackage(t *testing.T) {
+func TestRunInstallRunsSetupAfterInstallingMissingPackage(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USER", "tester")
@@ -94,7 +94,7 @@ pacman = ["docker"]
 			"groups tester": "tester",
 		},
 	}
-	if err := RunWithPlatform([]string{"--group", "docker", "--yes"}, r, "archlinux"); err != nil {
+	if err := runInstall([]string{"--group", "docker", "--yes"}, r); err != nil {
 		t.Fatal(err)
 	}
 	if !hasCall(r.Calls, "sudo systemctl enable --now docker.service") {
@@ -102,14 +102,23 @@ pacman = ["docker"]
 	}
 }
 
+func TestParseInstalledPackages(t *testing.T) {
+	got := parseInstalledPackages("git\nbase-devel\n  go\n")
+	for _, pkg := range []string{"git", "base-devel", "go"} {
+		if !got[pkg] {
+			t.Fatalf("missing package %q in %#v", pkg, got)
+		}
+	}
+}
+
 func writeInstallDefaults(t *testing.T, home, configTOML, packagesTOML string) {
 	t.Helper()
 	base := filepath.Join(home, ".local", "lib", "homebase", "config")
 	writeTestFile(t, filepath.Join(base, "homebase.toml"), `active_platform = "auto"`)
-	writeTestFile(t, filepath.Join(base, "platforms", "archlinux", "config.toml"), configTOML)
-	writeTestFile(t, filepath.Join(base, "platforms", "archlinux", "cleanup.toml"), ``)
-	writeTestFile(t, filepath.Join(base, "platforms", "archlinux", "sync.toml"), ``)
-	writeTestFile(t, filepath.Join(base, "platforms", "archlinux", "packages.d", "10-test.toml"), packagesTOML)
+	writeTestFile(t, filepath.Join(base, "platforms", ID, "config.toml"), configTOML)
+	writeTestFile(t, filepath.Join(base, "platforms", ID, "cleanup.toml"), ``)
+	writeTestFile(t, filepath.Join(base, "platforms", ID, "sync.toml"), ``)
+	writeTestFile(t, filepath.Join(base, "platforms", ID, "packages.d", "10-test.toml"), packagesTOML)
 }
 
 func writeTestFile(t *testing.T, path, content string) {

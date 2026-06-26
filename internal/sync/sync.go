@@ -11,10 +11,6 @@ import (
 	"github.com/gin31259461/homebase/internal/ui"
 )
 
-func Run(args []string) error {
-	return RunWithPlatform(args, run.New(), "archlinux")
-}
-
 func RunWithPlatform(args []string, r run.Runner, platformID string) error {
 	fs := flag.NewFlagSet("sync", flag.ContinueOnError)
 	msg := fs.String("m", "", "commit message")

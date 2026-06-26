@@ -9,17 +9,16 @@ import (
 
 	"github.com/gin31259461/homebase/internal/config"
 	"github.com/gin31259461/homebase/internal/gitutil"
-	"github.com/gin31259461/homebase/internal/install"
 	"github.com/gin31259461/homebase/internal/run"
-	"github.com/gin31259461/homebase/internal/system"
 	"github.com/gin31259461/homebase/internal/ui"
 )
 
-func Run(args []string) error {
-	return RunWithPlatform(args, run.New(), "archlinux")
+type Hooks struct {
+	InstallBasics func(run.Runner, []string) error
+	RunInstall    func([]string, run.Runner) error
 }
 
-func RunWithPlatform(args []string, r run.Runner, platformID string) error {
+func RunWithPlatform(args []string, r run.Runner, platformID string, hooks Hooks) error {
 	fs := flag.NewFlagSet("bootstrap", flag.ContinueOnError)
 	yes := fs.Bool("yes", false, "accept defaults and skip prompts")
 	fs.BoolVar(yes, "y", false, "accept defaults and skip prompts")
@@ -38,8 +37,10 @@ func RunWithPlatform(args []string, r run.Runner, platformID string) error {
 	}
 
 	ui.Section("Bootstrap")
-	if err := installBasics(r, cfg.Bootstrap.Basics); err != nil {
-		return err
+	if hooks.InstallBasics != nil {
+		if err := hooks.InstallBasics(r, cfg.Bootstrap.Basics); err != nil {
+			return err
+		}
 	}
 
 	effectiveSSH, effectiveHTTPS, err := resolveDotfilesRepo(cfg, *repo, !*yes)
@@ -56,11 +57,14 @@ func RunWithPlatform(args []string, r run.Runner, platformID string) error {
 		return err
 	}
 	if *runInstall {
+		if hooks.RunInstall == nil {
+			return fmt.Errorf("platform %q does not support bootstrap --install", platformID)
+		}
 		argv := []string{}
 		if *yes {
 			argv = append(argv, "--all", "--yes")
 		}
-		if err := install.RunWithPlatform(argv, r, platformID); err != nil {
+		if err := hooks.RunInstall(argv, r); err != nil {
 			return err
 		}
 	} else {
@@ -72,25 +76,6 @@ func RunWithPlatform(args []string, r run.Runner, platformID string) error {
 	ui.Note("Restart your shell or run: exec zsh")
 	ui.Note("Use hb sync to stage, commit, and push configured dotfile paths")
 	return nil
-}
-
-func installBasics(r run.Runner, pkgs []string) error {
-	if len(pkgs) == 0 {
-		return nil
-	}
-	var missing []string
-	for _, pkg := range pkgs {
-		if !system.PacmanInstalled(r, pkg) {
-			missing = append(missing, pkg)
-		}
-	}
-	if len(missing) == 0 {
-		ui.OK("Bootstrap packages already installed")
-		return nil
-	}
-	ui.Section("Installing bootstrap packages")
-	args := append([]string{"pacman", "-S", "--needed", "--noconfirm"}, missing...)
-	return r.Run("sudo", args...)
 }
 
 func resolveDotfilesRepo(cfg config.App, flagRepo string, interactive bool) (string, string, error) {
