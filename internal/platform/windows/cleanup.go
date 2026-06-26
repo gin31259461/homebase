@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 
+	sharedcleanup "github.com/gin31259461/homebase/internal/cleanup"
 	"github.com/gin31259461/homebase/internal/config"
 	"github.com/gin31259461/homebase/internal/run"
 	"github.com/gin31259461/homebase/internal/ui"
@@ -88,8 +89,9 @@ func runCleanupTask(r run.Runner, key string) error {
 			return r.Run("scoop", "cache", "rm", "*")
 		})
 	case "temp-files":
+		cmd := "$path = [IO.Path]::GetTempPath(); if (Test-Path -LiteralPath $path) { Get-ChildItem -LiteralPath $path -Force -ErrorAction SilentlyContinue | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue } }; exit 0"
 		return runCleanupCommand("Removing Windows Temp files", func() error {
-			return r.Run(powerShellExe(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "Get-ChildItem $env:TEMP -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue")
+			return r.Run(powerShellExe(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", cmd)
 		})
 	case "npm-cache":
 		if !commandExists("npm") {
@@ -97,7 +99,7 @@ func runCleanupTask(r run.Runner, key string) error {
 			return nil
 		}
 		return runCleanupCommand("Cleaning npm cache", func() error {
-			return r.Run("npm", "cache", "clean", "--force")
+			return sharedcleanup.RunNPMCacheClean(r)
 		})
 	case "winget-cache":
 		cmd := "$paths = @((Join-Path $env:LOCALAPPDATA 'Packages\\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\\LocalCache'), (Join-Path $env:TEMP 'WinGet')); foreach ($path in $paths) { if (Test-Path $path) { Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue } }"
@@ -105,8 +107,9 @@ func runCleanupTask(r run.Runner, key string) error {
 			return r.Run(powerShellExe(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", cmd)
 		})
 	case "recycle-bin":
+		cmd := "try { Clear-RecycleBin -Force -ErrorAction SilentlyContinue } catch { }; exit 0"
 		return runCleanupCommand("Clearing Recycle Bin", func() error {
-			return r.Run(powerShellExe(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "Clear-RecycleBin -Force -ErrorAction SilentlyContinue")
+			return r.Run(powerShellExe(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", cmd)
 		})
 	case "thumbnail-cache":
 		cmd := "$explorer = Get-Process -Name explorer -ErrorAction SilentlyContinue; if ($explorer) { Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1 }; $dir = Join-Path $env:LOCALAPPDATA 'Microsoft\\Windows\\Explorer'; if (Test-Path $dir) { Get-ChildItem $dir -Filter 'thumbcache_*.db' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue }; if ($explorer) { Start-Process explorer.exe }"

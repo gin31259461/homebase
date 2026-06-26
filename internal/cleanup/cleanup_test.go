@@ -102,6 +102,26 @@ func TestDirCleanupInfoStates(t *testing.T) {
 	}
 }
 
+func TestCleanupSizeStateThreshold(t *testing.T) {
+	tests := []struct {
+		name  string
+		bytes int64
+		want  ui.SelectState
+	}{
+		{name: "empty", bytes: 0, want: ui.SelectStateGood},
+		{name: "small", bytes: SmallCleanupBytes - 1, want: ui.SelectStatePartial},
+		{name: "large", bytes: SmallCleanupBytes, want: ui.SelectStateBad},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := CleanupSizeState(tt.bytes); got != tt.want {
+				t.Fatalf("CleanupSizeState(%d) = %s; want %s", tt.bytes, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestDirCleanupInfoUsesDuSize(t *testing.T) {
 	r := &testutil.Runner{
 		Outputs: map[string]string{

@@ -117,7 +117,6 @@ type cleanupItemInfo struct {
 	inspect []string
 }
 
-const smallCleanupBytes int64 = 10 * 1024 * 1024
 const journalVacuumTargetBytes int64 = 100 * 1024 * 1024
 
 func cleanupInfo(r run.Runner, task config.CleanupTask) cleanupItemInfo {
@@ -149,15 +148,15 @@ func pacmanCacheCleanupInfo(r run.Runner, path string) cleanupItemInfo {
 	if !reclaimableOK {
 		return dirCleanupInfo(r, path, "Pacman package cache")
 	}
-	state := cleanupSizeState(reclaimable)
-	inspect := []string{"Reclaimable by paccache -r: " + formatBytes(reclaimable)}
+	state := CleanupSizeState(reclaimable)
+	inspect := []string{"Reclaimable by paccache -r: " + FormatBytes(reclaimable)}
 	if totalOK {
-		inspect = append(inspect, "Total cache: "+formatBytes(total))
+		inspect = append(inspect, "Total cache: "+FormatBytes(total))
 	}
 	inspect = append(inspect, "Path: "+path)
 	return cleanupItemInfo{
 		state:   state,
-		summary: formatBytes(reclaimable) + " reclaimable",
+		summary: FormatBytes(reclaimable) + " reclaimable",
 		inspect: inspect,
 	}
 }
@@ -171,11 +170,11 @@ func dirCleanupInfo(r run.Runner, path, label string) cleanupItemInfo {
 			inspect: []string{label + ": size could not be read", "Path: " + path},
 		}
 	}
-	state := cleanupSizeState(bytes)
+	state := CleanupSizeState(bytes)
 	return cleanupItemInfo{
 		state:   state,
-		summary: formatBytes(bytes),
-		inspect: []string{label + ": " + formatBytes(bytes), "Path: " + path},
+		summary: FormatBytes(bytes),
+		inspect: []string{label + ": " + FormatBytes(bytes), "Path: " + path},
 	}
 }
 
@@ -218,7 +217,7 @@ func orphanCleanupInfo(r run.Runner) cleanupItemInfo {
 	size, ok := packagesInstalledSize(r, pkgs)
 	summary := fmt.Sprintf("%d orphaned package(s)", len(pkgs))
 	if ok {
-		summary += ", " + formatBytes(size)
+		summary += ", " + FormatBytes(size)
 	}
 	return cleanupItemInfo{
 		state:   ui.SelectStateBad,
@@ -247,13 +246,13 @@ func journalCleanupInfo(r run.Runner) cleanupItemInfo {
 	}
 	if bytes, ok := parseSize(text); ok {
 		reclaimable := journalReclaimableBytes(bytes)
-		state := cleanupSizeState(reclaimable)
+		state := CleanupSizeState(reclaimable)
 		return cleanupItemInfo{
 			state:   state,
-			summary: formatBytes(reclaimable) + " over " + formatBytes(journalVacuumTargetBytes) + " target",
+			summary: FormatBytes(reclaimable) + " over " + FormatBytes(journalVacuumTargetBytes) + " target",
 			inspect: []string{
-				"Total journal usage: " + formatBytes(bytes),
-				"Vacuum target: " + formatBytes(journalVacuumTargetBytes),
+				"Total journal usage: " + FormatBytes(bytes),
+				"Vacuum target: " + FormatBytes(journalVacuumTargetBytes),
 				text,
 			},
 		}
@@ -274,33 +273,11 @@ func journalReclaimableBytes(bytes int64) int64 {
 }
 
 func npmCacheCleanupInfo(r run.Runner) cleanupItemInfo {
-	root := npmCacheRoot(r)
-	path := filepath.Join(root, "_cacache")
+	root := NPMCacheRoot(r, "~/.npm")
+	path := NPMCachePayloadPath(root)
 	info := dirCleanupInfo(r, path, "npm content-addressable cache")
 	info.inspect = append(info.inspect, "npm cache root: "+root)
 	return info
-}
-
-func npmCacheRoot(r run.Runner) string {
-	out, err := r.Capture("npm", "config", "get", "cache")
-	if err == nil {
-		root := strings.TrimSpace(out)
-		if root != "" && root != "undefined" && root != "null" {
-			return config.Expand(root)
-		}
-	}
-	return config.Expand("~/.npm")
-}
-
-func cleanupSizeState(bytes int64) ui.SelectState {
-	switch {
-	case bytes == 0:
-		return ui.SelectStateGood
-	case bytes < smallCleanupBytes:
-		return ui.SelectStatePartial
-	default:
-		return ui.SelectStateBad
-	}
 }
 
 func cleanupInspect(task config.CleanupTask, info cleanupItemInfo) string {
@@ -385,28 +362,11 @@ func orphanInspect(pkgs []string, size int64, sizeKnown bool) []string {
 		fmt.Sprintf("Package count: %d", len(pkgs)),
 	}
 	if sizeKnown {
-		lines = append(lines, "Installed size: "+formatBytes(size))
+		lines = append(lines, "Installed size: "+FormatBytes(size))
 	}
 	lines = append(lines, "Packages:")
 	lines = append(lines, pkgs...)
 	return lines
-}
-
-func formatBytes(bytes int64) string {
-	if bytes == 0 {
-		return "0 B"
-	}
-	units := []string{"B", "KiB", "MiB", "GiB", "TiB"}
-	value := float64(bytes)
-	unit := 0
-	for value >= 1024 && unit < len(units)-1 {
-		value /= 1024
-		unit++
-	}
-	if unit == 0 {
-		return fmt.Sprintf("%d %s", bytes, units[unit])
-	}
-	return fmt.Sprintf("%.1f %s", value, units[unit])
 }
 
 var sizePattern = regexp.MustCompile(`(?i)([0-9]+(?:\.[0-9]+)?)\s*([kmgt]i?b?|bytes?|b)`)
@@ -489,7 +449,7 @@ func RunTask(r run.Runner, key string) error {
 	case "journal":
 		return r.Run("sudo", "journalctl", "--vacuum-size=100M")
 	case "npm-cache":
-		return r.Run("npm", "cache", "clean", "--force")
+		return RunNPMCacheClean(r)
 	case "thumbnails":
 		return os.RemoveAll(config.Expand("~/.cache/thumbnails"))
 	default:

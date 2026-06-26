@@ -265,6 +265,71 @@ func TestCleanupItemsIncludeRecycleBinSize(t *testing.T) {
 	}
 }
 
+func TestCleanupItemsUseNPMContentCachePayload(t *testing.T) {
+	withCommandExists(t, func(name string) bool {
+		return name == "npm"
+	})
+	root := t.TempDir()
+	cache := filepath.Join(root, "_cacache")
+	if err := os.MkdirAll(cache, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cache, "payload"), make([]byte, 2048), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "_logs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "_logs", "debug.log"), make([]byte, 4096), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := &testutil.Runner{
+		Outputs: map[string]string{
+			"npm config get cache": root + "\n",
+		},
+	}
+
+	items := cleanupItems(r, []config.CleanupTask{{
+		Key:    "npm-cache",
+		Label:  "npm cache",
+		Detail: "npm cache clean --force",
+	}})
+
+	if items[0].DetailValue != "2.0 KiB" {
+		t.Fatalf("detail value = %q; want _cacache size only", items[0].DetailValue)
+	}
+	if !strings.Contains(items[0].Inspect, "npm content-addressable cache: 2.0 KiB") ||
+		!strings.Contains(items[0].Inspect, "npm cache root: "+root) {
+		t.Fatalf("inspect = %q; want _cacache scanner detail and cache root", items[0].Inspect)
+	}
+	if want := []string{"npm config get cache"}; !reflect.DeepEqual(r.Calls, want) {
+		t.Fatalf("runner calls = %#v; want %#v", r.Calls, want)
+	}
+}
+
+func TestRunCleanupTaskUsesBestEffortPowerShellScripts(t *testing.T) {
+	withCommandExists(t, func(name string) bool {
+		return name == "powershell.exe"
+	})
+	r := &testutil.Runner{}
+
+	if err := runCleanupTask(r, "temp-files"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCleanupTask(r, "recycle-bin"); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(r.Calls) != 2 {
+		t.Fatalf("calls = %#v; want two cleanup commands", r.Calls)
+	}
+	for _, call := range r.Calls {
+		if !strings.Contains(call, "exit 0") {
+			t.Fatalf("call = %q; want cleanup script to exit 0", call)
+		}
+	}
+}
+
 func TestCleanupItemsUnknownWithoutScanner(t *testing.T) {
 	items := cleanupItems(&testutil.Runner{}, []config.CleanupTask{{
 		Key:    "custom-cleanup",
