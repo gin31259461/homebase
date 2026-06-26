@@ -4,7 +4,6 @@ paths = [
   ".dotfiles-repo",
   "doc",
   "assets",
-  ".local/bin/bootstrap.sh",
   ".gitconfig",
   ".gitattributes",
   ".gitmodules",
