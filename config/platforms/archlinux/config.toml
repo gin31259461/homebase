@@ -18,4 +18,5 @@ basics = [
   "ca-certificates",
   "lsd",
   "zsh",
+  "openssh",
 ]
