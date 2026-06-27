@@ -4,131 +4,91 @@ Homebase is a Go CLI for bootstrapping and maintaining dotfiles environments.
 It builds one binary, `hb`, from `cmd/hb`, detects the active platform, and
 dispatches commands to platform-specific code.
 
-## Project layout
+## Layout
 
 - `cmd/hb/`: thin CLI router only
-- `bootstrap/`: platform-specific shell/bootstrap entrypoints
-- `internal/bootstrap/`: `hb bootstrap`
-- `internal/install/`: shared install selection helpers
-- `internal/cleanup/`: shared cleanup helpers
+- `bootstrap/`: platform shell/bootstrap entrypoints
+- `internal/bootstrap/`: shared bootstrap flow and helpers
+- `internal/install/`, `internal/cleanup/`: shared selector/planning helpers
 - `internal/sync/`: `hb sync`
 - `internal/config/`: TOML loading and config seeding
-- `internal/platform/`: platform registry, detection, and implementations
+- `internal/platform/<id>/`: platform-owned install, cleanup, bootstrap, setup,
+  shell commands, scanners, defaults, and OS-specific paths
 - `internal/ui/`: Bubble Tea selector, prompts, spinner, styles
 - `internal/run/`: command runner abstraction
-- `internal/system/`: OS, package, service, and user helpers
-- `internal/gitutil/`: bare git and repo memory helpers
-- `internal/testutil/`: test fakes
+- `internal/system/`: small system probes such as command detection
+- `internal/gitutil/`: bare Git and repo memory helpers
+- `internal/testutil/`: shared test fakes
 - `config/`: default runtime config copied to `~/.config/homebase`
-- `config/platforms/<id>/`: platform-specific runtime config defaults
 
-## Development rules
+## Rules
 
 - Keep `cmd/hb/main.go` small; command behavior belongs in `internal/*`
 - Keep one binary only: `hb`
-- Keep command names stable; platform differences belong behind detection
-- Preserve current CLI flags unless the user asks for a breaking change
-- Prefer small package-level helpers over large cross-package abstractions
-- Keep config schema changes deliberate and update defaults plus README together
-- Config seeding should copy global config plus the active platform only
-- Keep platform-specific behavior under `internal/platform/<id>` when possible
+- Keep command names and flags stable unless the user asks for a breaking change
 - Use the runner abstraction for code that shells out
 - Do not run package install, cleanup, sudo, or bootstrap side effects in tests
-- For install/cleanup UI or platform parity work, read:
+- Config seeding should copy global config plus the active platform only
+- Update README, defaults, and affected skill docs together when changing config
+  schema/defaults, CLI flags, bootstrap/install/cleanup/sync behavior, or
+  verification workflow
+- Prefer small package-level helpers over broad shared abstractions
+- Keep ownership concrete: defaults, side effects, commands, file layouts, and
+  platform policy stay with the package/platform that owns them
+- Extract shared code only when it is policy-free or at least two real callers
+  need the same explicit contract
+- Keep platform bootstrap divergences in `internal/platform/<id>/bootstrap.go`
+  and platform setup hooks under `internal/platform/<id>`
+- Split files when they begin mixing orchestration, item/status construction,
+  scanning, task execution, shell helpers, and tests
+- Ask focused questions before complex ambiguous changes
+
+## Required Skills
+
+- For install/cleanup UI or platform parity work, read
   `.agents/skills/homebase-platform-ui/SKILL.md`
-- Do not let any file have a large amount of code, consider separating of concern
-- Complex tasks should ask the user questions to confirm the detailed requirements
+- For `bootstrap/windows.ps1`, remote install snippets, or PowerShell 5.1
+  `irm/iwr | iex` compatibility work, read
+  `.agents/skills/powershell-remote-bootstrap/SKILL.md`
 
-## Abstraction and ownership rules
+## Subagents
 
-- Start from concrete ownership. Keep behavior in the package that owns the
-  domain decision, side effect, external command, file layout, or default value.
-  Extract only the part that is independent of that owner.
-- Prefer narrow, proven abstractions over broad category layers. Do not create a
-  shared layer just because code looks similar once; wait until at least two
-  real callers need the same contract.
-- Shared packages should contain policy-free helpers, data loading, parsing,
-  formatting, selection mechanics, runner interfaces, and other reusable
-  primitives. They should not assume a specific platform, package manager,
-  service manager, shell, filesystem layout, config directory, or workflow.
-- If shared orchestration needs owner-specific behavior, inject it as a small
-  hook or interface implemented by the owning package. Keep command arguments,
-  installation logic, cleanup logic, and OS-specific checks with that owner.
-- Defaults are ownership decisions. Apply defaults in the package that owns the
-  behavior, not in generic loaders or helpers where they may affect unrelated
-  callers.
-- Keep configuration isolated by the owner that consumes it. Global loaders may
-  parse fields used by multiple owners, but they should not silently apply one
-  owner's defaults to every consumer.
-- Avoid abstractions that require callers to know hidden ordering, magic keys,
-  or implicit side effects. Prefer explicit inputs, explicit selected keys, and
-  small data structures over cross-package global behavior.
-- Keep files focused by responsibility: command orchestration, item/status
-  construction, scanning, task execution, shell helpers, and tests should be
-  split when a file begins to mix those concerns.
-- Tests should follow ownership. Owner-specific behavior belongs in the owner
-  package's tests; shared package tests should cover only shared contracts and
-  reusable helpers.
-- Platform code is one example of these rules: `internal/platform/<id>` owns
-  package-manager behavior, installed-state scans, cleanup scanners/runners,
-  bootstrap package installation, setup hooks, shell commands, OS-specific
-  paths, and platform defaults.
-
-## Project subagents
-
-Project-local subagents live in `.codex/agents/`. Use them deliberately for
-focused work:
+Project-local subagents live in `.codex/agents/`:
 
 - `golang-pro`: Go implementation in `cmd/hb` and `internal/*`
-- `cli-developer`: command flags, CLI UX, automation paths, and shell-facing
-  workflows
-- `powershell-5.1-expert`: Windows bootstrap compatibility and remote
-  `irm/iwr | iex` behavior
-- `powershell-7-expert`: PowerShell 7 post-bootstrap automation and future
-  Windows platform scripting
-- `test-automator`: targeted regression tests and fake-runner coverage
-- `reviewer`: PR-style correctness, regression, security, and test review
-- `code-mapper`: execution-flow and ownership mapping before broad changes
-- `documentation-engineer`: README, config, and operator workflow docs tied to
-  repository reality
+- `cli-developer`: command flags, CLI UX, automation, and shell workflows
+- `powershell-5.1-expert`: Windows bootstrap and remote `irm/iwr | iex`
+- `powershell-7-expert`: PowerShell 7 post-bootstrap automation
+- `test-automator`: regression tests and fake-runner coverage
+- `reviewer`: correctness, regression, security, and test review
+- `code-mapper`: execution-flow and ownership mapping
+- `documentation-engineer`: README, config, and operator workflow docs
 
 ## Testing
 
-Put unit tests next to the package they test:
-
-```text
-internal/install/plan_test.go
-internal/config/config_test.go
-```
-
-Prefer same-package tests for internal helpers:
-
-```go
-package install
-```
-
-Use `internal/testutil` for shared fakes.
+- Put unit tests next to the package they test, using same-package tests for
+  internal helpers when practical
+- Use `internal/testutil` for shared fakes
+- Keep owner-specific behavior in owner package tests; shared package tests
+  should cover only shared contracts and reusable helpers
 
 ## Verification
 
 Before finishing code changes, run:
 
 ```bash
-gofmt -w cmd internal
-go test ./...
-go vet ./...
-go build -o ~/.local/bin/hb ./cmd/hb
+make check
+make build
 ```
 
 For README or Markdown changes, also run:
 
 ```bash
-markdownlint-cli2 README.md
+make lint
 ```
 
 Smoke-check the CLI when command routing changes:
 
 ```bash
-hb help
-hb install --group __none__ --yes --no-setup
+make smoke
 ```

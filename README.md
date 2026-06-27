@@ -23,8 +23,9 @@ Homebase is installed as source at `~/.local/lib/homebase` and built to
 
 Homebase currently supports:
 
-- `archlinux`: Arch Linux and compatible Arch-family systems such as Manjaro
-- `windows`: Windows PowerShell 5.1+ bootstrap with WinGet, Scoop, and Go
+- `archlinux`: systems detected by `/etc/arch-release` or
+  `/etc/manjaro-release`
+- `windows`: Windows with PowerShell 5.1+ and `winget` available
 
 Platform detection runs automatically. To override it, edit:
 
@@ -38,6 +39,20 @@ active_platform = "windows"
 
 Use `active_platform = "auto"` for normal detection.
 
+## Requirements
+
+Remote bootstrap assumes:
+
+- Windows: PowerShell 5.1 or newer and `winget` available in `PATH`
+- Arch Linux: `bash`, `curl`, `sudo`, and `pacman` on a system detected as
+  Arch or Manjaro
+- Build from source: Go 1.24.2 as declared in `go.mod`
+
+Development commands additionally assume:
+
+- `make` for the Makefile targets
+- `markdownlint-cli2` for `make lint`
+
 ## Install
 
 ### Windows
@@ -49,6 +64,8 @@ $repoUrl = "https://raw.githubusercontent.com/gin31259461/homebase"
 irm "$repoUrl/main/bootstrap/windows.ps1" | iex
 ```
 
+The option examples below use paths from a checked-out copy.
+
 The Windows bootstrap:
 
 1. Adds `~/.local/bin` to the user `Path`
@@ -57,7 +74,7 @@ The Windows bootstrap:
 4. Builds `~/.local/bin/hb.exe`
 5. Runs `hb bootstrap`
 
-Useful Windows bootstrap options:
+Useful Windows bootstrap options when running a local copy of the script:
 
 ```powershell
 .\bootstrap\windows.ps1 -Yes
@@ -74,11 +91,13 @@ repo_url="https://raw.githubusercontent.com/gin31259461/homebase"
 bash <(curl -fsSL "$repo_url/main/bootstrap/archlinux.sh")
 ```
 
+The option examples below use paths from a checked-out copy.
+
 The Arch bootstrap installs the minimum pacman dependencies, clones or updates
 Homebase at `~/.local/lib/homebase`, builds `~/.local/bin/hb`, and runs
 `hb bootstrap`.
 
-Useful Arch bootstrap options:
+Useful Arch bootstrap options when running a local clone of the script:
 
 ```bash
 bash bootstrap/archlinux.sh --yes
@@ -142,8 +161,10 @@ Bootstrap behavior:
 5. Stores the selected dotfiles remote in `~/.dotfiles-repo`
 6. Sets `status.showUntrackedFiles = no`
 7. Initializes Git submodules
-8. Runs platform-specific shell/profile setup
-9. Optionally runs `hb install`
+8. On Arch-family systems, installs Oh My Zsh plus bundled plugins/theme when
+   accepted or when running with `--yes`
+9. Runs platform-specific shell/profile setup
+10. Optionally runs `hb install`
 
 ## Install Packages
 
@@ -265,11 +286,14 @@ Tracked paths live in:
 ~/.config/homebase/platforms/<platform>/sync.toml
 ```
 
-Homebase uses the same bare Git layout as the `dot` alias:
+Homebase uses this bare Git layout for dotfiles operations:
 
 ```bash
-git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME
+git --git-dir=$HOME/.dotfiles --work-tree=$HOME
 ```
+
+On Arch-family bootstrap flows, Homebase also appends a `dot` alias for this
+command to `~/.zshrc`.
 
 ## Configuration
 
@@ -383,19 +407,21 @@ branch = "main"
 Run the standard checks:
 
 ```bash
+make check
+make build
+make lint
+```
+
+Those targets wrap the underlying commands:
+
+```bash
 gofmt -w cmd internal
 go test ./...
 go vet ./...
 go build -o ~/.local/bin/hb ./cmd/hb
-markdownlint-cli2 README.md
-```
-
-The Makefile wraps the same workflow:
-
-```bash
-make check
-make build
-make lint
+markdownlint-cli2 README.md AGENTS.md \
+  .agents/skills/homebase-platform-ui/SKILL.md \
+  .agents/skills/powershell-remote-bootstrap/SKILL.md
 ```
 
 Smoke-check the CLI:
