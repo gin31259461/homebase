@@ -209,6 +209,9 @@ func installFeature(r run.Runner, feature string) error {
 		if err := installWingetPackage(r, "OpenJS.NodeJS"); err != nil {
 			return err
 		}
+		if err := ensureNodeNPMOnPath(); err != nil {
+			return err
+		}
 		if commandExists("pnpm") {
 			ui.OK("pnpm already installed")
 			return nil

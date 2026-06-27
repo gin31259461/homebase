@@ -130,15 +130,27 @@ func deployDotfiles(r run.Runner, cfg config.App, platformID, sshRepo, httpsRepo
 	if err := r.Run("rsync", "--recursive", "--exclude", ".git", worktree+"/", config.Expand("~")+"/"); err != nil {
 		return err
 	}
-	if sshRepo != "" {
-		remoteArgs := gitutil.DotArgs(cfg, "remote", "set-url", "origin", sshRepo)
-		_ = r.Run(remoteArgs[0], remoteArgs[1:]...)
-		if err := gitutil.SaveRepoMemory(cfg.Dotfiles.MemoryFile, sshRepo, cfg.Dotfiles.Branch); err != nil {
-			return err
-		}
+	if err := rememberClonedRemote(r, cfg, cloneURL, sshRepo); err != nil {
+		return err
 	}
 	ui.OK("Dotfiles deployed")
 	return config.EnsureForPlatform(platformID, false)
+}
+
+func rememberClonedRemote(r run.Runner, cfg config.App, cloneURL, sshRepo string) error {
+	if sshRepo == "" {
+		return nil
+	}
+	if cloneURL != "" && cloneURL != sshRepo {
+		remoteArgs := gitutil.DotArgs(cfg, "remote", "set-url", "origin", sshRepo)
+		if err := r.Run(remoteArgs[0], remoteArgs[1:]...); err != nil {
+			return fmt.Errorf("set dotfiles origin to %s: %w", sshRepo, err)
+		}
+	}
+	if err := gitutil.SaveRepoMemory(cfg.Dotfiles.MemoryFile, sshRepo, cfg.Dotfiles.Branch); err != nil {
+		return fmt.Errorf("save dotfiles repo memory: %w", err)
+	}
+	return nil
 }
 
 func configureDotfiles(r run.Runner, cfg config.App) error {

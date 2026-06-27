@@ -1,6 +1,7 @@
 package windows
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,6 +30,46 @@ func addProcessPath(path string) {
 		}
 	}
 	_ = os.Setenv("PATH", os.Getenv("PATH")+string(os.PathListSeparator)+path)
+}
+
+func ensureNodeNPMOnPath() error {
+	if commandExists("npm") {
+		return nil
+	}
+	for _, path := range nodeJSPathCandidates() {
+		if !hasAnyFile(path, "npm.cmd", "npm.exe", "npm") {
+			continue
+		}
+		addProcessPath(path)
+		if commandExists("npm") {
+			return nil
+		}
+	}
+	return fmt.Errorf("npm not found in PATH after installing Node.js")
+}
+
+func nodeJSPathCandidates() []string {
+	var paths []string
+	add := func(base string, elems ...string) {
+		if strings.TrimSpace(base) == "" {
+			return
+		}
+		all := append([]string{base}, elems...)
+		paths = append(paths, filepath.Join(all...))
+	}
+	add(os.Getenv("ProgramFiles"), "nodejs")
+	add(os.Getenv("LocalAppData"), "Programs", "nodejs")
+	add(os.Getenv("ProgramFiles(x86)"), "nodejs")
+	return paths
+}
+
+func hasAnyFile(dir string, names ...string) bool {
+	for _, name := range names {
+		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 func hbBinDir() string {

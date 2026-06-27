@@ -61,7 +61,7 @@ type syncGroup struct {
 }
 
 func EnsureGlobal(force bool) error {
-	src := Expand("~/.local/lib/homebase/config/homebase.toml")
+	src := filepath.Join(SourceRoot(), "config", "homebase.toml")
 	dst := Expand("~/.config/homebase/homebase.toml")
 	if _, err := os.Stat(src); err != nil {
 		return fmt.Errorf("default global config not found at %s", src)
@@ -73,12 +73,19 @@ func EnsureForPlatform(platformID string, force bool) error {
 	if err := EnsureGlobal(force); err != nil {
 		return err
 	}
-	src := filepath.Join(Expand("~/.local/lib/homebase/config/platforms"), platformID)
+	src := filepath.Join(SourceRoot(), "config", "platforms", platformID)
 	dst := PlatformConfigDir(platformID)
 	if _, err := os.Stat(src); err != nil {
 		return fmt.Errorf("default config for platform %q not found at %s", platformID, src)
 	}
 	return copyTree(src, dst, force)
+}
+
+func SourceRoot() string {
+	if root := strings.TrimSpace(os.Getenv("HOMEBASE_DIR")); root != "" {
+		return Expand(root)
+	}
+	return Expand("~/.local/lib/homebase")
 }
 
 func copyTree(src, dst string, force bool) error {

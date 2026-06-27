@@ -55,3 +55,27 @@ func commandKey(name string, args ...string) string {
 func Err() error {
 	return errors.New("fake error")
 }
+
+type ExitCodeError struct {
+	code int
+	err  error
+}
+
+func (e ExitCodeError) Error() string {
+	return e.err.Error()
+}
+
+func (e ExitCodeError) Unwrap() error {
+	return e.err
+}
+
+func (e ExitCodeError) ExitCode() int {
+	return e.code
+}
+
+func ExitError(code int) error {
+	return ExitCodeError{
+		code: code,
+		err:  errors.New("fake exit error"),
+	}
+}

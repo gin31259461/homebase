@@ -3,6 +3,7 @@ package sync
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"strings"
 
 	"github.com/gin31259461/homebase/internal/config"
@@ -50,6 +51,8 @@ func RunWithPlatform(args []string, r run.Runner, platformID string) error {
 	if err := r.QuietIn(workTree, diffArgs[0], diffArgs[1:]...); err == nil {
 		ui.OK("No staged changes")
 		return nil
+	} else if code, ok := run.ExitCode(err); !ok || code != 1 {
+		return fmt.Errorf("check staged changes: %w", err)
 	}
 	commitArgs := gitutil.DotArgs(cfg, "commit", "-m", commitMessage)
 	if err := r.RunIn(workTree, commitArgs[0], commitArgs[1:]...); err != nil {

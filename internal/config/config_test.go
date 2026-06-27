@@ -164,6 +164,31 @@ label = "Core"
 	}
 }
 
+func TestEnsureForPlatformUsesHomebaseDirSourceRoot(t *testing.T) {
+	home := t.TempDir()
+	sourceRoot := filepath.Join(home, "src", "homebase")
+	t.Setenv("HOME", home)
+	t.Setenv("HOMEBASE_DIR", sourceRoot)
+	defaults := filepath.Join(sourceRoot, "config")
+	writeFile(t, filepath.Join(defaults, "homebase.toml"), `active_platform = "auto"`)
+	writeFile(t, filepath.Join(defaults, "platforms", "archlinux", "config.toml"), `[dotfiles]`)
+	writeFile(t, filepath.Join(defaults, "platforms", "archlinux", "cleanup.toml"), ``)
+	writeFile(t, filepath.Join(defaults, "platforms", "archlinux", "sync.toml"), ``)
+	writeFile(t, filepath.Join(defaults, "platforms", "archlinux", "packages.d", "base.toml"), `[core]
+label = "Core"
+`)
+
+	if err := EnsureForPlatform("archlinux", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".config", "homebase", "homebase.toml")); err != nil {
+		t.Fatalf("global config was not copied: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".config", "homebase", "platforms", "archlinux", "config.toml")); err != nil {
+		t.Fatalf("archlinux config was not copied from HOMEBASE_DIR: %v", err)
+	}
+}
+
 func TestEnsureForPlatformPreservesExistingConfigWithoutForce(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

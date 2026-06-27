@@ -1,6 +1,8 @@
 package archlinux
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -164,10 +166,14 @@ net.ipv6.conf.all.forwarding = 1
 		ui.OK("Hotspot connection profile already exists")
 		return nil
 	}
+	hotspotPSK, err := generateHotspotPSK()
+	if err != nil {
+		return err
+	}
 	commands := [][]string{
 		{"con", "add", "con-name", "Arch-Hyprland", "ifname", "wlan0", "type", "wifi", "ssid", "Arch-Hyprland"},
 		{"con", "modify", "Arch-Hyprland", "wifi.band", "bg", "wifi.channel", "6", "wifi.mode", "ap"},
-		{"con", "modify", "Arch-Hyprland", "wifi-sec.key-mgmt", "wpa-psk", "wifi-sec.psk", "ilovearchlinux", "802-11-wireless-security.pmf", "1"},
+		{"con", "modify", "Arch-Hyprland", "wifi-sec.key-mgmt", "wpa-psk", "wifi-sec.psk", hotspotPSK, "802-11-wireless-security.pmf", "1"},
 		{"con", "modify", "Arch-Hyprland", "ipv4.addresses", "192.168.10.1/24", "ipv4.method", "shared", "ipv4.never-default", "yes"},
 		{"con", "modify", "Arch-Hyprland", "ipv6.method", "shared", "ipv6.addr-gen-mode", "default"},
 		{"con", "modify", "Arch-Hyprland", "802-11-wireless-security.proto", "rsn", "802-11-wireless-security.pairwise", "ccmp", "802-11-wireless-security.group", "ccmp"},
@@ -178,7 +184,16 @@ net.ipv6.conf.all.forwarding = 1
 		}
 	}
 	ui.Note("Hotspot profile uses wlan0; adjust with nmcli if your adapter differs")
+	ui.Note("Generated a unique hotspot PSK; view it with: nmcli -s -g 802-11-wireless-security.psk connection show Arch-Hyprland")
 	return nil
+}
+
+func generateHotspotPSK() (string, error) {
+	buf := make([]byte, 24)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
 func docker(r run.Runner) error {

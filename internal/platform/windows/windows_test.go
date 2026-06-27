@@ -54,6 +54,88 @@ func TestFilterCoreFeaturesDropsSetupFeatures(t *testing.T) {
 	}
 }
 
+func TestInstallFeatureNodePNPMRefreshesPathAfterWingetInstall(t *testing.T) {
+	t.Setenv("PATH", filepath.Join(t.TempDir(), "bin"))
+	programFiles := filepath.Join(t.TempDir(), "Program Files")
+	nodeDir := filepath.Join(programFiles, "nodejs")
+	t.Setenv("ProgramFiles", programFiles)
+	if err := os.MkdirAll(nodeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(nodeDir, "npm.cmd"), []byte("@echo off\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	withCommandExists(t, func(name string) bool {
+		switch name {
+		case "winget":
+			return true
+		case "pnpm":
+			return false
+		case "npm":
+			return pathContainsDir(os.Getenv("PATH"), nodeDir)
+		default:
+			return false
+		}
+	})
+	r := &testutil.Runner{
+		Errors: map[string]error{
+			"winget list --id OpenJS.NodeJS --exact": testutil.Err(),
+		},
+	}
+
+	if err := installFeature(r, "node-pnpm"); err != nil {
+		t.Fatal(err)
+	}
+
+	if !pathContainsDir(os.Getenv("PATH"), nodeDir) {
+		t.Fatalf("PATH = %q; want %q to be added", os.Getenv("PATH"), nodeDir)
+	}
+	if want := []string{
+		"winget list --id OpenJS.NodeJS --exact",
+		"winget install --id OpenJS.NodeJS --source winget --accept-source-agreements --accept-package-agreements",
+		"npm install -g pnpm",
+	}; !reflect.DeepEqual(r.Calls, want) {
+		t.Fatalf("runner calls = %#v; want %#v", r.Calls, want)
+	}
+}
+
+func TestInstallFeatureNodePNPMFailsWhenNPMStillMissing(t *testing.T) {
+	t.Setenv("PATH", filepath.Join(t.TempDir(), "bin"))
+	programFiles := filepath.Join(t.TempDir(), "Program Files")
+	t.Setenv("ProgramFiles", programFiles)
+
+	withCommandExists(t, func(name string) bool {
+		switch name {
+		case "winget":
+			return true
+		case "pnpm", "npm":
+			return false
+		default:
+			return false
+		}
+	})
+	r := &testutil.Runner{
+		Errors: map[string]error{
+			"winget list --id OpenJS.NodeJS --exact": testutil.Err(),
+		},
+	}
+
+	err := installFeature(r, "node-pnpm")
+	if err == nil {
+		t.Fatal("installFeature returned nil error")
+	}
+	if !strings.Contains(err.Error(), "npm not found") {
+		t.Fatalf("error = %q; want npm lookup failure", err)
+	}
+	if want := []string{
+		"winget list --id OpenJS.NodeJS --exact",
+		"winget install --id OpenJS.NodeJS --source winget --accept-source-agreements --accept-package-agreements",
+	}; !reflect.DeepEqual(r.Calls, want) {
+		t.Fatalf("runner calls = %#v; want %#v", r.Calls, want)
+	}
+}
+
 func TestPackageItemsUseSingleWingetScanForInstallState(t *testing.T) {
 	withCommandExists(t, func(name string) bool {
 		return name == "winget"
@@ -355,4 +437,13 @@ func withCommandExists(t *testing.T, fn func(string) bool) {
 	t.Cleanup(func() {
 		commandExists = orig
 	})
+}
+
+func pathContainsDir(pathValue, want string) bool {
+	for _, part := range filepath.SplitList(pathValue) {
+		if filepath.Clean(part) == filepath.Clean(want) {
+			return true
+		}
+	}
+	return false
 }

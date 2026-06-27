@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,7 +29,7 @@ label = "Core"
 	diffCall := "cd " + home + " && git --git-dir=" + filepath.Join(home, ".dotfiles") + " --work-tree=" + home + " diff --cached --quiet"
 	r := &testutil.Runner{
 		Errors: map[string]error{
-			diffCall: errors.New("changes staged"),
+			diffCall: testutil.ExitError(1),
 		},
 	}
 	if err := RunWithPlatform([]string{"-m", "sync test", "--no-push"}, r, "archlinux"); err != nil {
@@ -41,6 +40,39 @@ label = "Core"
 		if strings.Contains(call, " git ") && !strings.HasPrefix(call, "cd "+home+" && ") {
 			t.Fatalf("git call did not run from home: %s", call)
 		}
+	}
+}
+
+func TestRunFailsWhenDiffCheckErrors(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeFile(t, filepath.Join(home, ".local", "lib", "homebase", "config", "homebase.toml"), `active_platform = "auto"`)
+	writeFile(t, filepath.Join(home, ".local", "lib", "homebase", "config", "platforms", "archlinux", "config.toml"), `[dotfiles]
+dir = "~/.dotfiles"
+branch = "main"
+memory_file = "~/.dotfiles-repo"
+`)
+	writeFile(t, filepath.Join(home, ".local", "lib", "homebase", "config", "platforms", "archlinux", "sync.toml"), `[shell]
+paths = [".zshrc"]
+`)
+	writeFile(t, filepath.Join(home, ".local", "lib", "homebase", "config", "platforms", "archlinux", "cleanup.toml"), ``)
+	writeFile(t, filepath.Join(home, ".local", "lib", "homebase", "config", "platforms", "archlinux", "packages.d", "base.toml"), `[core]
+label = "Core"
+`)
+
+	diffCall := "cd " + home + " && git --git-dir=" + filepath.Join(home, ".dotfiles") + " --work-tree=" + home + " diff --cached --quiet"
+	r := &testutil.Runner{
+		Errors: map[string]error{
+			diffCall: testutil.ExitError(2),
+		},
+	}
+
+	err := RunWithPlatform([]string{"-m", "sync test", "--no-push"}, r, "archlinux")
+	if err == nil {
+		t.Fatal("RunWithPlatform() error = nil; want failure")
+	}
+	if !strings.Contains(err.Error(), "check staged changes") {
+		t.Fatalf("RunWithPlatform() error = %q; want diff context", err)
 	}
 }
 
