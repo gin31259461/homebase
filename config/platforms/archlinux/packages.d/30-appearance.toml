@@ -14,6 +14,9 @@ pacman = [
   "adwaita-cursors",
   "adw-gtk-theme",
 ]
+aur = [
+  "bibata-cursor-theme-bin",
+]
 
 [fonts]
 label = "Fonts"

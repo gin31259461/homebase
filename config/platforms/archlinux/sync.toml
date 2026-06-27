@@ -27,7 +27,6 @@ paths = [
 
 [gtk]
 paths = [
-  ".local/share/icons/Bibata-Modern-Ice",
   ".config/gtk-3.0",
   ".config/gtk-4.0",
 ]
