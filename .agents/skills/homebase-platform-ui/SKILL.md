@@ -7,18 +7,6 @@ description: Use when implementing or refactoring Homebase install and cleanup p
 
 Use this workflow for Homebase platform install and cleanup changes.
 
-## Relevant Subagents
-
-- Use `cli-developer` for selector UX, flag behavior, interactive versus
-  unattended command flows, and shell-facing workflow changes.
-- Use `golang-pro` for Go implementation details in shared packages and
-  platform command code.
-- Use `test-automator` for regression coverage around selectors, fake runners,
-  config parsing, and scanner behavior.
-- Use `reviewer` after non-trivial platform parity or cleanup/install changes.
-- Use `code-mapper` before broad changes that cross `internal/ui`,
-  `internal/install`, `internal/cleanup`, and `internal/platform/*`.
-
 ## Architecture
 
 - Keep shared list behavior in `internal/ui`; platform code should only
