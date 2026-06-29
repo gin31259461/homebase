@@ -61,6 +61,7 @@ label = "Neovim Editor"
 pacman = [
   "lazygit",
   "neovim",
+  "tree-sitter-cli",
 ]
 
 [noctalia]
