@@ -31,6 +31,8 @@ pacman = [
   "tldr",
   "eza",
   "bat",
+  "tar",
+  "curl",
   "git-delta",
 ]
 
@@ -41,8 +43,8 @@ pacman = [
   "ghostty",
 ]
 
-[dm]
-label = "Display Manager"
-pacman = [
-  "sddm",
-]
+# [dm]
+# label = "Display Manager"
+# pacman = [
+#   "sddm",
+# ]

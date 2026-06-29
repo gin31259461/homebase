@@ -41,13 +41,13 @@ aur = [
   "lazydocker-bin",
 ]
 
-[asus]
-label = "ASUS ROG"
-aur = [
-  "asusctl",
-  "rog-control-center",
-  "supergfxctl",
-]
+# [asus]
+# label = "ASUS ROG"
+# aur = [
+#   "asusctl",
+#   "rog-control-center",
+#   "supergfxctl",
+# ]
 
 [msi]
 label = "MSI"
