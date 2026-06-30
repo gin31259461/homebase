@@ -1,76 +1,34 @@
 # Homebase
 
-Homebase is a Go CLI for bootstrapping and maintaining dotfiles environments.
-It builds one binary, `hb`, detects the active platform, seeds TOML defaults,
-and routes setup work to platform-owned code.
-
-Use Homebase when you want a repeatable way to bring a Windows or Arch-family
-machine onto the same dotfiles, package groups, cleanup tasks, and sync workflow
-without keeping that logic in one large shell script.
-
-## Why Homebase
-
-- Bootstrap a fresh machine from source into `~/.local/lib/homebase`
-- Build a single `hb` binary into `~/.local/bin`
-- Seed only the global config plus the detected platform config
-- Deploy dotfiles as a bare Git repository at `~/.dotfiles`
-- Install platform package groups through an interactive selector or explicit
-  automation flags
-- Run platform cleanup tasks with inspectable plans before destructive work
-- Stage, commit, and push configured dotfile paths with `hb sync`
-
-Homebase is opinionated about ownership. Shared packages handle routing,
-configuration, selectors, and reusable helpers. Platform packages own install
-policy, cleanup policy, bootstrap differences, OS paths, setup hooks, and
-side effects.
+Homebase is a Go CLI for bootstrapping and maintaining the maintainer's
+dotfiles-based workstation setup. It builds one binary, `hb`, and keeps
+platform-specific behavior behind the active platform implementation.
 
 ## Supported Platforms
 
-- `archlinux`: systems detected by `/etc/arch-release` or
-  `/etc/manjaro-release`
-- `windows`: Windows detected by Go at runtime
+- `archlinux`: Arch Linux and Manjaro hosts
+- `windows`: Windows hosts
 
-Platform detection runs automatically. To override it, edit:
-
-```text
-~/.config/homebase/homebase.toml
-```
-
-```toml
-active_platform = "windows"
-```
-
-Use `active_platform = "auto"` for normal detection.
+The checked-in defaults point at the maintainer's dotfiles repositories. For a
+different machine, pass your own dotfiles repository during bootstrap or edit
+the runtime config under `~/.config/homebase`.
 
 ## Requirements
 
-Runtime bootstrap requirements:
+- Go 1.24.2, matching `go.mod`
+- `make` for development shortcuts
+- `markdownlint-cli2` for Markdown linting
+- Arch Linux or Manjaro: `bash`, `curl`, `sudo`, `pacman`
+- Windows: PowerShell 5.1 or newer, `winget`
 
-- Windows: PowerShell 5.1 or newer and `winget` in `PATH`
-- Arch Linux or Manjaro: `bash`, `curl`, `sudo`, and `pacman`
-- Build from source: Go 1.24.2, as declared in `go.mod`
+Bootstrap and install commands perform real machine setup. Read the command
+sections before running them on a daily-use system.
 
-Development requirements:
-
-- `make`
-- `markdownlint-cli2` for `make lint`
-
-## Get Started
-
-The default platform configs in this repository point at the maintainer's
-dotfiles repositories:
-
-```text
-git@github.com:gin31259461/dotfiles-arch.git
-git@github.com:gin31259461/dotfiles-win.git
-```
-
-For your own machine, pass your dotfiles repository during bootstrap or edit
-the runtime config before running `hb bootstrap`.
+## Installation
 
 ### Arch Linux
 
-Run the remote bootstrap and pass your dotfiles repo:
+Run the bootstrap script from GitHub:
 
 ```bash
 repo_url="https://raw.githubusercontent.com/gin31259461/homebase"
@@ -78,22 +36,23 @@ bash <(curl -fsSL "$repo_url/main/bootstrap/archlinux.sh") \
   --repo git@github.com:you/dotfiles-arch.git
 ```
 
-Useful local options from a checked-out copy:
+Useful local options:
 
 ```bash
 bash bootstrap/archlinux.sh --yes
 bash bootstrap/archlinux.sh --install
 bash bootstrap/archlinux.sh --repo git@github.com:you/dotfiles-arch.git
 bash bootstrap/archlinux.sh --homebase-dir "$HOME/src/homebase"
+bash bootstrap/archlinux.sh --homebase-repo https://github.com/you/homebase.git
 ```
 
-The Arch bootstrap verifies an Arch-family host, installs minimum build
-dependencies with `pacman`, clones or updates Homebase, builds `hb`, and runs
-`hb bootstrap` with the remaining arguments.
+The script installs `git`, `base-devel`, and `go` with `pacman`,
+then clones or updates Homebase at `~/.local/lib/homebase`,
+builds `hb` into `~/.local/bin`, and runs `hb bootstrap`.
 
 ### Windows
 
-Run the remote bootstrap from PowerShell:
+Run the bootstrap script from PowerShell:
 
 ```powershell
 $repoUrl = "https://raw.githubusercontent.com/gin31259461/homebase"
@@ -101,19 +60,23 @@ $script = irm "$repoUrl/main/bootstrap/windows.ps1"
 & ([scriptblock]::Create($script)) -DotfilesRepo "git@github.com:you/dotfiles-win.git"
 ```
 
-Useful local options from a checked-out copy:
+Useful local options:
 
 ```powershell
 .\bootstrap\windows.ps1 -Yes
 .\bootstrap\windows.ps1 -Install
 .\bootstrap\windows.ps1 -DotfilesRepo "git@github.com:you/dotfiles-win.git"
+.\bootstrap\windows.ps1 `
+  -HomebaseRepo "https://github.com/you/homebase.git" `
+  -Branch main
 ```
 
-The Windows bootstrap adds `~/.local/bin` to the user `Path`, installs Git and
-Go through WinGet when missing, clones or updates Homebase, builds `hb.exe`,
+The script adds `~/.local/bin` to the user `Path`,
+installs Git and Go through WinGet when missing,
+clones or updates Homebase, builds `hb.exe`,
 and runs `hb bootstrap`.
 
-### Build From Source
+### Build from Source
 
 ```bash
 git clone https://github.com/gin31259461/homebase.git ~/.local/lib/homebase
@@ -131,7 +94,10 @@ go build -o ~/.local/bin/hb.exe ./cmd/hb
 hb help
 ```
 
-## Command Summary
+`HOMEBASE_DIR` can point `hb` at a different source checkout for config
+seeding. Without it, Homebase reads defaults from `~/.local/lib/homebase`.
+
+## Commands
 
 ```text
 hb bootstrap [--yes] [--repo <repo>] [--install]
@@ -141,15 +107,16 @@ hb sync      [-m <message>] [--no-push]
 hb config init [-f|--force]
 ```
 
-Interactive commands use Bubble Tea by default. Automation should pass `--yes`
-with explicit `--group` or `--task` selections, or `--all`.
+Interactive install and cleanup flows use a Bubble Tea selector. For
+unattended runs, pass `--yes` with explicit `--group` or `--task` values, or
+use `--all`.
 
-## Core Workflows
+Unknown explicit group and task keys are skipped with a warning.
 
 ### Bootstrap
 
-`hb bootstrap` prepares the current machine after the shell bootstrap has built
-the binary.
+`hb bootstrap` prepares the dotfiles environment after the shell bootstrap has
+built the binary.
 
 ```bash
 hb bootstrap --repo git@github.com:you/dotfiles.git
@@ -157,65 +124,95 @@ hb bootstrap --repo you/dotfiles --install
 hb bootstrap --yes
 ```
 
-Bootstrap ensures config exists, installs configured basics, clones the
-dotfiles repo as a bare repo, copies tracked files into `$HOME`, records the
-chosen dotfiles remote in `~/.dotfiles-repo`, initializes submodules, configures
-dotfile Git status, and optionally runs `hb install`.
+Common behavior:
 
-On Arch-family systems, the shared bootstrap flow can also install Oh My Zsh
-and bundled plugins/theme when accepted or when running with `--yes`.
+- Seeds runtime config for the detected platform.
+- Installs configured bootstrap basics.
+- Deploys the dotfiles repo as a bare Git repo at `~/.dotfiles`.
+- Copies tracked files into `$HOME`.
+- Stores the resolved repo in `~/.dotfiles-repo`.
+- Runs `git submodule update --init --recursive`.
+- Runs `hb install --all --yes` when `--install` and `--yes` are both used.
 
-### Install
+Arch bootstrap also configures the `dot` alias in `.zshrc` and can install
+Oh My Zsh plus the configured plugins and theme. Windows bootstrap links
+PowerShell profiles when `~/.pwsh/profile.ps1` exists.
 
-Run the interactive selector:
+Repository inputs accepted by `--repo`:
+
+- `user/repo`
+- `git@github.com:user/repo.git`
+- `https://github.com/user/repo.git`
+- Other `git@...` SSH URLs
+
+For GitHub repositories, Homebase prefers SSH and falls back to HTTPS when SSH
+access to `HEAD` is unavailable.
+
+### Install Packages
 
 ```bash
 hb install
-```
-
-Install explicit groups:
-
-```bash
-hb install --group core --group cli --yes
+hb install --group core --group cli-tools --yes
 hb install --all --yes
-hb install --group core --yes --no-setup
+hb install --group docker --yes --no-setup
 ```
 
-Arch package groups use `pacman` and AUR packages through the configured helper,
-defaulting to `yay`. Windows groups support WinGet packages, Scoop buckets,
-Scoop packages, PowerShell modules, and setup features.
-
-Runtime package groups live in:
+Package groups are read from:
 
 ```text
 ~/.config/homebase/platforms/<platform>/packages.d/*.toml
 ```
 
-### Cleanup
+Arch groups can include:
 
-Run the interactive cleanup selector:
+- `pacman`
+- `aur`
+
+Arch install scans installed packages with `pacman -Qq`, installs missing
+official packages with `sudo pacman -S --needed --noconfirm`, installs missing
+AUR packages with the configured helper, and runs post-install setup hooks
+unless `--no-setup` is passed.
+
+Windows groups can include:
+
+- `features`
+- `winget`
+- `scoop_buckets`
+- `scoop`
+- `psmodules`
+
+Windows install can install WinGet packages, Scoop buckets and packages,
+PowerShell modules, and setup features such as PowerShell profile links,
+WezTerm context menu entries, and the Windows 10 classic context menu key.
+`--no-setup` filters out setup-only features while keeping core features such
+as Scoop and Node/pnpm.
+
+### Cleanup
 
 ```bash
 hb cleanup
-```
-
-Run explicit tasks:
-
-```bash
-hb cleanup --task scoop-cache --task temp-files --yes
+hb cleanup --task pacman-cache --task thumbnails --yes
+hb cleanup --task temp-files --task recycle-bin --yes
 hb cleanup --all --yes
 ```
 
-Runtime cleanup tasks live in:
+Cleanup tasks are read from:
 
 ```text
 ~/.config/homebase/platforms/<platform>/cleanup.toml
 ```
 
-Tasks with a missing `requires` command are hidden. Arch orphan cleanup is
-intentionally conservative: it prints the package list and review guidance,
-then runs `sudo pacman -Rns <packages...>` without `--noconfirm` so pacman can
-show its own transaction prompt.
+Tasks with a `requires` command are hidden when that command is unavailable.
+The selector shows cheap scanner results when implemented. Unknown scanner
+state remains selectable.
+
+Arch cleanup includes tasks for pacman cache, AUR cache, orphan packages,
+systemd journal, npm cache, and thumbnails. Orphan package cleanup is
+conservative: it prints a review list and uses pacman confirmation instead of
+`--noconfirm`.
+
+Windows cleanup includes tasks for Scoop cache, temp files, npm cache, WinGet
+cache, Recycle Bin, and thumbnail cache.
 
 ### Sync Dotfiles
 
@@ -228,34 +225,38 @@ hb sync -m "chore: sync dotfiles"
 hb sync -m "chore: sync dotfiles" --no-push
 ```
 
-An empty prompted commit message exits without staging, committing, or pushing.
-Tracked paths live in:
+Tracked paths are read from:
 
 ```text
 ~/.config/homebase/platforms/<platform>/sync.toml
 ```
 
-Homebase uses this bare Git layout for dotfiles operations:
+Homebase runs dotfiles Git commands with this layout:
 
 ```bash
 git --git-dir=$HOME/.dotfiles --work-tree=$HOME
 ```
 
+If no commit message is passed, `hb sync` prompts for one. An empty message
+exits without committing.
+
 ### Config
 
-Default config lives in this repository under `config/`. At runtime, Homebase
-copies only the global config and the detected platform defaults into
-`~/.config/homebase`.
+Default config lives in `config/`. Runtime config is seeded to:
+
+```text
+~/.config/homebase
+```
+
+Only `config/homebase.toml` and the detected platform subtree are copied.
+Existing files are preserved unless `--force` is used.
 
 ```bash
 hb config init
 hb config init --force
 ```
 
-`hb config init` seeds missing files without overwriting existing config.
-`--force` refreshes runtime config from repository defaults.
-
-Global config:
+Global platform selection:
 
 ```toml
 active_platform = "auto"
@@ -265,153 +266,42 @@ arch = "archlinux"
 manjaro = "archlinux"
 ```
 
-Platform config includes dotfiles, package manager, and bootstrap basics:
-
-```toml
-[dotfiles]
-ssh_repo = "git@github.com:you/dotfiles.git"
-https_repo = "https://github.com/you/dotfiles.git"
-dir = "~/.dotfiles"
-branch = "main"
-memory_file = "~/.dotfiles-repo"
-
-[package_manager]
-official = "pacman"
-aur = "yay"
-
-[bootstrap]
-basics = [
-  "git",
-]
-```
-
-Package group fields:
-
-```toml
-[example]
-label = "Example"
-default = false
-pacman = ["git"]
-aur = ["yay-bin"]
-winget = ["Git.Git"]
-scoop_buckets = ["nerd-fonts"]
-scoop = ["FiraCode-NF"]
-psmodules = ["PSReadLine"]
-features = ["powershell-profile"]
-```
-
-Cleanup task fields:
-
-```toml
-[cache]
-label = "Cache"
-default = false
-detail = "safe cleanup command summary"
-requires = "optional-command"
-sudo = false
-```
-
-Set `default = true` only when an item should be preselected in the interactive
-selector. Explicit `--group`, `--task`, and `--all` arguments ignore interactive
-defaults.
+- Use `active_platform = "auto"` for normal detection,
+  or set a platform id such as `"archlinux"` or `"windows"` to override detection
+- `default = true` preselects an item in the interactive selector
+- Explicit `--group`, `--task`, and `--all` choices ignore interactive defaults
 
 ## Project Layout
 
 ```text
-cmd/hb/              thin CLI router
+cmd/hb/              CLI router
 bootstrap/           platform bootstrap entrypoints
-config/              default runtime config copied to ~/.config/homebase
+config/              defaults copied to ~/.config/homebase
 internal/bootstrap/  shared bootstrap flow and helpers
-internal/install/    shared install selector/planning helpers
+internal/install/    shared install selector and planning helpers
 internal/cleanup/    shared cleanup helpers
 internal/sync/       hb sync implementation
 internal/config/     TOML loading and config seeding
-internal/platform/   platform registry and implementations
-internal/ui/         Bubble Tea selector, prompts, spinner, styles
+internal/platform/   platform detection and implementations
+internal/ui/         Bubble Tea selectors, prompts, spinner, styles
 internal/run/        command runner abstraction
-internal/system/     system probes
+internal/system/     small system probes
 internal/gitutil/    bare Git and repo memory helpers
 internal/testutil/   shared test fakes
 ```
 
-Platform-owned code lives under:
+Platform-owned behavior lives under `internal/platform/archlinux/` and
+`internal/platform/windows/`.
 
-```text
-internal/platform/archlinux/
-internal/platform/windows/
-```
+## Development
 
-## FAQ
-
-### How do I avoid cloning the maintainer's dotfiles?
-
-Pass `--repo` to `hb bootstrap` or pass `-DotfilesRepo` to the Windows
-bootstrap script. You can also edit `~/.config/homebase/platforms/<platform>/`
-after `hb config init` and before running `hb bootstrap`.
-
-### Where does Homebase install itself?
-
-The default source checkout is `~/.local/lib/homebase`. The binary is
-`~/.local/bin/hb` on Unix-like systems and `~/.local/bin/hb.exe` on Windows.
-
-### Why did platform detection fail?
-
-Homebase currently supports Windows and Arch-family Linux. On a supported host,
-run `hb config init`, then set `active_platform` in
-`~/.config/homebase/homebase.toml` if auto-detection is not enough.
-
-### Why was a package group or cleanup task skipped?
-
-Unknown `--group` and `--task` keys are skipped with a warning. Cleanup tasks
-with a `requires` command are also hidden when that command is not available.
-
-### What gets copied into runtime config?
-
-Homebase copies `config/homebase.toml` plus only the active platform subtree
-from `config/platforms/<platform>/` into `~/.config/homebase`.
-
-### What if Windows cannot find `hb`?
-
-Open a new terminal or confirm this directory is in the user `Path`:
-
-```text
-%USERPROFILE%\.local\bin
-```
-
-### What if Arch AUR installs fail?
-
-Verify the bootstrap dependencies and configured AUR helper:
-
-```bash
-pacman -Qi base-devel git
-command -v yay
-```
-
-## Contributing
-
-Read `AGENTS.md` before changing code. It captures the repository boundaries,
-side-effect rules, verification commands, and AI-specific workflow constraints.
-
-Before finishing code changes, run:
+Run the standard checks before finishing code changes:
 
 ```bash
 make check
 make build
 ```
 
-For README or Markdown changes, also run:
-
-```bash
-make lint
-```
-
-Smoke-check command routing changes:
-
-```bash
-make smoke
-```
-
-Bug reports should include the platform, command, relevant flags, expected
-behavior, actual output, and whether runtime config came from defaults or local
-edits. Pull requests should keep command names and flags stable unless the
-change intentionally proposes a breaking CLI change.
+Do not use `hb install`, `hb cleanup`, `hb bootstrap`, package managers, sudo,
+or bootstrap scripts as verification unless you explicitly want live machine
+side effects.

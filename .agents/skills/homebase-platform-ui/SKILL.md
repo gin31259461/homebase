@@ -1,6 +1,9 @@
 ---
 name: homebase-platform-ui
-description: Use when implementing or refactoring Homebase install and cleanup platform flows, especially interactive list item state, default selection, inspection details, cleanup sizing, selector keymaps, and cross-platform parity.
+description: >
+    Implementing or refactoring Homebase install and cleanup platform flows, 
+    especially interactive list item state, default selection, inspection details,
+    cleanup sizing, selector keymaps, and cross-platform parity.
 ---
 
 # Homebase Platform UI Workflow

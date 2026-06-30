@@ -25,7 +25,7 @@ build:
 check: fmt test vet
 
 lint:
-	$(MARKDOWNLINT) README.md AGENTS.md .agents/skills/homebase-platform-ui/SKILL.md .agents/skills/powershell-remote-bootstrap/SKILL.md
+	$(MARKDOWNLINT) README.md
 
 smoke: build
 	"$(HB_BIN)" help

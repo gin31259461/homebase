@@ -1,9 +1,15 @@
 ---
-name: powershell-remote-bootstrap
-description: Use when editing, reviewing, or debugging Windows PowerShell bootstrap scripts that are downloaded and executed through Invoke-RestMethod/Invoke-WebRequest aliases such as irm or iwr piped to Invoke-Expression/iex, especially Homebase bootstrap/windows.ps1, remote install snippets, script param blocks, execution policy handling, BOM safety, or parser errors like Unexpected attribute CmdletBinding.
+name: homebase-powershell-remote-bootstrap
+description: > 
+    Editing, reviewing, or debugging Windows PowerShell bootstrap scripts that are 
+    downloaded and executed through Invoke-RestMethod/Invoke-WebRequest aliases 
+    such as irm or iwr piped to Invoke-Expression/iex,
+    especially Homebase bootstrap/windows.ps1, 
+    remote install snippets, script param blocks, execution policy handling,
+    BOM safety, or parser errors like Unexpected attribute CmdletBinding.
 ---
 
-# PowerShell Remote Bootstrap
+# Homebase PowerShell Remote Bootstrap
 
 Use this workflow for PowerShell entrypoints intended to work both as local
 scripts and as remote one-liners such as `irm <url> | iex`.
