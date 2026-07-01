@@ -38,6 +38,7 @@ pacman = [
   "blueman",
   "dnsmasq",
   "hostapd",
+  "mtr",
 ]
 
 [capture]
