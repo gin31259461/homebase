@@ -18,7 +18,6 @@ paths = [
   ".config/nvim",
   ".config/opencode/opencode.jsonc",
   ".config/homebase",
-  ".codex/agents",
   ".pwsh",
   ".starship",
   ".vimrc",
