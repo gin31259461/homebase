@@ -10,7 +10,6 @@ paths = [
   ".gitignore",
   ".editorconfig",
   ".agents",
-  ".codex/agents",
   "AGENTS.md",
 ]
 
