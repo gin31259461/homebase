@@ -9,7 +9,6 @@ pacman = [
   "nwg-look",
   "nwg-displays",
   "papirus-icon-theme",
-  "gtk-engine-murrine",
   "adwaita-icon-theme",
   "adwaita-cursors",
   "adw-gtk-theme",
