@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gin31259461/homebase/internal/bootstrap"
+	"github.com/gin31259461/homebase/internal/platform"
 	"github.com/gin31259461/homebase/internal/run"
 	synccmd "github.com/gin31259461/homebase/internal/sync"
 )
@@ -48,6 +49,14 @@ func (p Platform) Bootstrap(args []string) error {
 
 func (p Platform) Install(args []string) error {
 	return runInstall(args, p.runner)
+}
+
+func (p Platform) Setup(args []string) error {
+	return runSetupCommand(args, p.runner)
+}
+
+func (p Platform) SetupHooks() []platform.SetupHook {
+	return setupHooks()
 }
 
 func (p Platform) Cleanup(args []string) error {

@@ -32,10 +32,14 @@ func main() {
 		err = active.Bootstrap(os.Args[2:])
 	case "install":
 		err = active.Install(os.Args[2:])
+	case "setup":
+		err = active.Setup(os.Args[2:])
 	case "cleanup":
 		err = active.Cleanup(os.Args[2:])
 	case "sync":
 		err = active.Sync(os.Args[2:])
+	case "completion":
+		err = runCompletion(os.Args[2:], active)
 	case "config":
 		err = runConfig(os.Args[2:])
 	case "help", "-h", "--help":
@@ -83,10 +87,12 @@ func usage() {
 Usage:
   hb bootstrap [--yes] [--repo <repo>] [--install]
   hb install   [--group <key>] [--all] [--yes] [--no-setup]
+  hb setup     [--hook <key>] [--all] [--yes]
   hb cleanup   [--task <key>] [--all] [--yes]
   hb sync      [-m <message>] [--no-push]
   hb config init [-f|--force]
+  hb completion zsh
 
 Interactive commands use Bubble Tea by default. Automation should pass --yes
-with explicit --group/--task selections or --all.`)
+with explicit --group/--hook/--task selections or --all.`)
 }

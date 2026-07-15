@@ -12,8 +12,15 @@ type Platform interface {
 	Matches() bool
 	Bootstrap(args []string) error
 	Install(args []string) error
+	Setup(args []string) error
+	SetupHooks() []SetupHook
 	Cleanup(args []string) error
 	Sync(args []string) error
+}
+
+type SetupHook struct {
+	Key   string
+	Label string
 }
 
 func Detect(platforms []Platform) (Platform, error) {

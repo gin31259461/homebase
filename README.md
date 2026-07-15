@@ -17,6 +17,10 @@ Sections: [Features](#features), [Install](#install), [Usage](#usage),
 - Bootstrap a bare Git dotfiles repository into `$HOME`.
 - Install grouped packages from TOML defaults.
 - Run platform-specific setup hooks after package installation.
+- Rerun setup hooks independently to repair configuration without reinstalling
+  packages.
+- Complete `hb` commands, flags, package groups, setup hooks, and cleanup tasks
+  in Zsh.
 - Inspect and run cleanup tasks for package caches, temp files, journals, and
   other common local clutter.
 - Sync configured dotfile paths by staging, committing, and optionally pushing
@@ -29,6 +33,10 @@ Arch Linux and Manjaro:
 
 - Detection: `/etc/arch-release` or `/etc/manjaro-release`
 - Package sources: `pacman` and an AUR helper, default `yay`
+- Setup: configure mkinitcpio early modules when `amdgpu` is active and rebuild
+  initramfs after a change; other GPU drivers are left unchanged with a manual
+  setup warning
+- Shell: install native Zsh completion during bootstrap and shell setup
 - Cleanup: pacman cache, AUR cache, orphans, journal, npm cache, thumbnails
 
 Windows:
@@ -105,9 +113,11 @@ make build
 ```text
 hb bootstrap [--yes] [--repo <repo>] [--install]
 hb install   [--group <key>] [--all] [--yes] [--no-setup]
+hb setup     [--hook <key>] [--all] [--yes]
 hb cleanup   [--task <key>] [--all] [--yes]
 hb sync      [-m <message>] [--no-push]
 hb config init [-f|--force]
+hb completion zsh
 ```
 
 ### Bootstrap dotfiles
@@ -137,6 +147,28 @@ hb install --all --yes
 Without flags, Homebase opens an interactive selector. With flags, it builds an
 install plan from the selected TOML groups and skips packages already detected
 as installed where the platform scanner supports it.
+
+### Rerun setup hooks
+
+```bash
+hb setup
+hb setup --hook system --yes
+hb setup --hook shell --yes
+hb setup --all --yes
+```
+
+Setup hooks repair platform configuration without installing packages. The
+interactive selector reports missing prerequisites; explicit and `--all`
+selections skip hooks whose required packages are not installed. If package
+scanning fails, hooks remain runnable because prerequisite state is unknown.
+
+On Arch Linux, bootstrap installs `_hb` into Zsh's system completion directory.
+Run `hb setup --hook shell --yes` to regenerate it after changing configured
+package groups or cleanup tasks. To print the completion script instead, run:
+
+```bash
+hb completion zsh
+```
 
 ### Clean local caches
 

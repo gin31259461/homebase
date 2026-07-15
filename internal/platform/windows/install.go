@@ -148,18 +148,22 @@ func printInstallPlan(plan installPlan) {
 }
 
 func filterCoreFeatures(features []string) []string {
-	setup := map[string]bool{
-		"powershell-profile":   true,
-		"wezterm-context-menu": true,
-		"win10-classic-menu":   true,
-	}
 	var out []string
 	for _, feature := range features {
-		if !setup[feature] {
+		if !isSetupFeature(feature) {
 			out = append(out, feature)
 		}
 	}
 	return out
+}
+
+func isSetupFeature(feature string) bool {
+	switch feature {
+	case "powershell-profile", "wezterm-context-menu", "win10-classic-menu":
+		return true
+	default:
+		return false
+	}
 }
 
 func installWindowsPlan(r run.Runner, plan installPlan) error {

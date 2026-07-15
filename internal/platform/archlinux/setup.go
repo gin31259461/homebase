@@ -3,6 +3,7 @@ package archlinux
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +17,11 @@ import (
 
 type setupRunner func() error
 
+const (
+	mkinitcpioConfigPath = "/etc/mkinitcpio.conf"
+	amdgpuModulesLine    = "MODULES=(usbhid xhci_pci amdgpu)"
+)
+
 func setupExists(key string) bool {
 	_, ok := setupRunners(run.New())[key]
 	return ok
@@ -28,6 +34,7 @@ func setupRunners(r run.Runner) map[string]setupRunner {
 		"sddm":           func() error { return sddm(r) },
 		"network":        func() error { return networkManager(r) },
 		"networkmanager": func() error { return networkManager(r) },
+		"shell":          func() error { return zshCompletion(r) },
 		"docker":         func() error { return docker(r) },
 		"razer":          func() error { return razer(r) },
 		"sunshine":       func() error { return sunshine(r) },
@@ -45,6 +52,10 @@ func runSetupKey(r run.Runner, key string) error {
 
 func runSetup(r run.Runner, groups []config.PackageGroup, selected []string, installed map[string]bool, yes bool) error {
 	ui.Section("Extra configuration")
+	ui.Section("Setup system")
+	if err := systemSetup(r); err != nil {
+		return err
+	}
 	groupByKey := map[string]config.PackageGroup{}
 	for _, group := range groups {
 		groupByKey[group.Key] = group
@@ -82,6 +93,65 @@ func runSetup(r run.Runner, groups []config.PackageGroup, selected []string, ins
 		ui.Note("No package setup hooks matched the selected groups")
 	}
 	return nil
+}
+
+func systemSetup(r run.Runner) error {
+	modules, err := r.Capture("lsmod")
+	if err != nil {
+		warnManualMkinitcpio("Unable to detect the active GPU driver")
+		return nil
+	}
+	if !usesAMDGPU(modules) {
+		warnManualMkinitcpio("amdgpu is not the active GPU driver")
+		return nil
+	}
+
+	content, err := r.Capture("cat", mkinitcpioConfigPath)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", mkinitcpioConfigPath, err)
+	}
+	updated := setMkinitcpioModules(content)
+	if updated == content {
+		ui.OK("mkinitcpio modules already configured for amdgpu")
+		return nil
+	}
+	if err := writeSudoFile(r, mkinitcpioConfigPath, updated); err != nil {
+		return err
+	}
+	if err := r.Run("sudo", "mkinitcpio", "-P"); err != nil {
+		return err
+	}
+	ui.OK("Configured mkinitcpio modules for amdgpu")
+	return nil
+}
+
+func usesAMDGPU(modules string) bool {
+	for _, line := range strings.Split(strings.ToLower(modules), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) > 0 && fields[0] == "amdgpu" {
+			return true
+		}
+	}
+	return false
+}
+
+func setMkinitcpioModules(content string) string {
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "MODULES=") {
+			lines[i] = amdgpuModulesLine
+			return strings.Join(lines, "\n")
+		}
+	}
+	if content != "" && !strings.HasSuffix(content, "\n") {
+		content += "\n"
+	}
+	return content + amdgpuModulesLine + "\n"
+}
+
+func warnManualMkinitcpio(reason string) {
+	ui.Warn(reason + "; leaving " + mkinitcpioConfigPath + " unchanged")
+	ui.Note("Configure MODULES in " + mkinitcpioConfigPath + " for your GPU before rebooting, or the system may boot to a blank screen")
 }
 
 func groupHasInstalledPackage(group config.PackageGroup, installed map[string]bool) bool {
@@ -237,7 +307,7 @@ func sunshine(r run.Runner) error {
 			return err
 		}
 	}
-	return r.Run("systemctl", "--user", "enable", "sunshine.service")
+	return r.Run("systemctl", "--user", "enable", "app-dev.lizardbyte.app.Sunshine.service")
 }
 
 func writeSudoFile(r run.Runner, path, content string) error {

@@ -54,6 +54,21 @@ func TestFilterCoreFeaturesDropsSetupFeatures(t *testing.T) {
 	}
 }
 
+func TestConfiguredSetupHooksOnlyIncludesConfiguredFeatures(t *testing.T) {
+	groups := []config.PackageGroup{
+		{Features: []string{"scoop", "powershell-profile"}},
+		{Features: []string{"win10-classic-menu", "node-pnpm"}},
+	}
+	hooks := configuredSetupHooks(groups)
+	got := make([]string, 0, len(hooks))
+	for _, hook := range hooks {
+		got = append(got, hook.Key)
+	}
+	if want := []string{"powershell-profile", "win10-classic-menu"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("configuredSetupHooks = %#v; want %#v", got, want)
+	}
+}
+
 func TestInstallFeatureNodePNPMRefreshesPathAfterWingetInstall(t *testing.T) {
 	t.Setenv("PATH", filepath.Join(t.TempDir(), "bin"))
 	programFiles := filepath.Join(t.TempDir(), "Program Files")

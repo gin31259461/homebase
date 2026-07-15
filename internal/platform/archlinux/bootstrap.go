@@ -17,9 +17,12 @@ func installBasics(r run.Runner, pkgs []string) error {
 	}
 	if len(missing) == 0 {
 		ui.OK("Bootstrap packages already installed")
-		return nil
+		return zshCompletion(r)
 	}
 	ui.Section("Installing bootstrap packages")
 	args := append([]string{"pacman", "-S", "--needed", "--noconfirm"}, missing...)
-	return r.Run("sudo", args...)
+	if err := r.Run("sudo", args...); err != nil {
+		return err
+	}
+	return zshCompletion(r)
 }
