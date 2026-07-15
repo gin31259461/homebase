@@ -130,7 +130,8 @@ func scanInstallFeatures(r run.Runner) (map[string]bool, bool) {
 
 func installFeatureScanCommand() string {
 	return "$found = @(); " +
-		"if (Test-Path 'HKCU:\\Software\\Classes\\Directory\\background\\shell\\wezterm-nightly') { $found += 'wezterm-context-menu' }; " +
+		"if ((Test-Path 'HKCU:\\Software\\Classes\\Directory\\Background\\shell\\wezterm\\command') -and " +
+		"(Test-Path 'HKCU:\\Software\\Classes\\Directory\\shell\\wezterm\\command')) { $found += 'wezterm-context-menu' }; " +
 		"if (Test-Path 'HKCU:\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\\InprocServer32') { $found += 'win10-classic-menu' }; " +
 		"$found -join \"`n\""
 }

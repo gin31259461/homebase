@@ -308,14 +308,51 @@ func linkPowerShellProfiles(r run.Runner) error {
 }
 
 func addWezTermContextMenu(r run.Runner) error {
-	cmd := "$cmd = Get-Command wezterm-gui.exe -CommandType Application -ErrorAction SilentlyContinue; " +
-		"if (-not $cmd) { $prefix = scoop prefix wezterm-nightly 2>$null; if ($prefix) { $path = Join-Path $prefix 'wezterm-gui.exe' } } else { $path = $cmd.Source }; " +
-		"if (-not $path -or -not (Test-Path $path)) { throw 'wezterm-gui.exe not found' }; " +
-		"$key = 'HKCU:\\Software\\Classes\\Directory\\background\\shell\\wezterm-nightly'; $sub = Join-Path $key 'command'; " +
-		"New-Item -Path $key -Force | Out-Null; Set-ItemProperty -Path $key -Name '(default)' -Value 'Open with wezterm-nightly'; Set-ItemProperty -Path $key -Name 'icon' -Value $path; " +
-		"New-Item -Path $sub -Force | Out-Null; Set-ItemProperty -Path $sub -Name '(default)' -Value (\"$path start --cwd .\")"
 	ui.Section("WezTerm context menu")
-	return r.Run(powerShellExe(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", cmd)
+	legacyKeys := []string{
+		`HKCU\Software\Classes\Directory\Background\shell\wezterm`,
+		`HKCU\Software\Classes\Directory\shell\wezterm`,
+		`HKCU\Software\Classes\Directory\Background\shell\wezterm-nightly`,
+		`HKCU\Software\Classes\Directory\shell\wezterm-nightly`,
+		`HKCR\Directory\Background\shell\Open WezTerm here`,
+		`HKCR\Directory\shell\Open WezTerm here`,
+	}
+	for _, key := range legacyKeys {
+		_ = r.Quiet("reg.exe", "delete", key, "/f")
+	}
+
+	const executable = `C:\Program Files\WezTerm\wezterm-gui.exe`
+	menus := []struct {
+		key string
+		cwd string
+	}{
+		{key: `HKCU\Software\Classes\Directory\Background\shell\wezterm`, cwd: `%V`},
+		{key: `HKCU\Software\Classes\Directory\shell\wezterm`, cwd: `%1`},
+	}
+	for _, menu := range menus {
+		if err := setRegistryString(r, menu.key, "", "Open WezTerm here"); err != nil {
+			return err
+		}
+		if err := setRegistryString(r, menu.key, "Icon", executable); err != nil {
+			return err
+		}
+		command := `"` + executable + `" start --cwd "` + menu.cwd + `"`
+		if err := setRegistryString(r, menu.key+`\command`, "", command); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func setRegistryString(r run.Runner, key, name, value string) error {
+	args := []string{"add", key}
+	if name == "" {
+		args = append(args, "/ve")
+	} else {
+		args = append(args, "/v", name)
+	}
+	args = append(args, "/t", "REG_SZ", "/d", value, "/f")
+	return r.Run("reg.exe", args...)
 }
 
 func restoreClassicContextMenu(r run.Runner) error {

@@ -54,6 +54,46 @@ func TestFilterCoreFeaturesDropsSetupFeatures(t *testing.T) {
 	}
 }
 
+func TestAddWezTermContextMenuReplacesLegacyEntries(t *testing.T) {
+	r := &testutil.Runner{}
+	if err := addWezTermContextMenu(r); err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{
+		`reg.exe delete HKCU\Software\Classes\Directory\Background\shell\wezterm /f`,
+		`reg.exe delete HKCU\Software\Classes\Directory\shell\wezterm /f`,
+		`reg.exe delete HKCU\Software\Classes\Directory\Background\shell\wezterm-nightly /f`,
+		`reg.exe delete HKCU\Software\Classes\Directory\shell\wezterm-nightly /f`,
+		`reg.exe delete HKCR\Directory\Background\shell\Open WezTerm here /f`,
+		`reg.exe delete HKCR\Directory\shell\Open WezTerm here /f`,
+		`reg.exe add HKCU\Software\Classes\Directory\Background\shell\wezterm /ve /t REG_SZ /d Open WezTerm here /f`,
+		`reg.exe add HKCU\Software\Classes\Directory\Background\shell\wezterm /v Icon /t REG_SZ /d C:\Program Files\WezTerm\wezterm-gui.exe /f`,
+		`reg.exe add HKCU\Software\Classes\Directory\Background\shell\wezterm\command /ve /t REG_SZ /d "C:\Program Files\WezTerm\wezterm-gui.exe" start --cwd "%V" /f`,
+		`reg.exe add HKCU\Software\Classes\Directory\shell\wezterm /ve /t REG_SZ /d Open WezTerm here /f`,
+		`reg.exe add HKCU\Software\Classes\Directory\shell\wezterm /v Icon /t REG_SZ /d C:\Program Files\WezTerm\wezterm-gui.exe /f`,
+		`reg.exe add HKCU\Software\Classes\Directory\shell\wezterm\command /ve /t REG_SZ /d "C:\Program Files\WezTerm\wezterm-gui.exe" start --cwd "%1" /f`,
+	}
+	if !reflect.DeepEqual(r.Calls, want) {
+		t.Fatalf("registry calls = %#v; want %#v", r.Calls, want)
+	}
+}
+
+func TestInstallFeatureScanCommandRequiresBothWezTermMenus(t *testing.T) {
+	command := installFeatureScanCommand()
+	for _, path := range []string{
+		`HKCU:\Software\Classes\Directory\Background\shell\wezterm\command`,
+		`HKCU:\Software\Classes\Directory\shell\wezterm\command`,
+	} {
+		if !strings.Contains(command, path) {
+			t.Fatalf("feature scan command is missing %q: %s", path, command)
+		}
+	}
+	if strings.Contains(command, "wezterm-nightly") {
+		t.Fatalf("feature scan command still checks legacy nightly key: %s", command)
+	}
+}
+
 func TestConfiguredSetupHooksOnlyIncludesConfiguredFeatures(t *testing.T) {
 	groups := []config.PackageGroup{
 		{Features: []string{"scoop", "powershell-profile"}},

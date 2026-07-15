@@ -43,6 +43,8 @@ Windows:
 
 - Detection: `runtime.GOOS == "windows"`
 - Package sources: WinGet, Scoop, PowerShell modules, setup features
+- Setup: PowerShell profile links, per-user WezTerm directory and background
+  context menus, and the optional Windows 10 classic context menu
 - Cleanup: temp files, Recycle Bin, WinGet cache, Scoop cache, npm cache,
   thumbnails
 
