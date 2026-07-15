@@ -28,7 +28,6 @@ func setupRunners(r run.Runner) map[string]setupRunner {
 		"sddm":           func() error { return sddm(r) },
 		"network":        func() error { return networkManager(r) },
 		"networkmanager": func() error { return networkManager(r) },
-		"dnsmasq":        func() error { return dnsmasq(r) },
 		"docker":         func() error { return docker(r) },
 		"razer":          func() error { return razer(r) },
 		"sunshine":       func() error { return sunshine(r) },
@@ -123,13 +122,6 @@ Type=Application
 	return writeSudoFile(r, "/usr/share/wayland-sessions/hyprland-uwsm.desktop", session)
 }
 
-func dnsmasq(r run.Runner) error {
-	if systemActive(r, "dnsmasq") {
-		return r.Run("sudo", "systemctl", "restart", "dnsmasq")
-	}
-	return r.Run("sudo", "systemctl", "enable", "dnsmasq", "--now")
-}
-
 func networkManager(r run.Runner) error {
 	mainConf := `[main]
 dns=dnsmasq
@@ -183,8 +175,10 @@ net.ipv6.conf.all.forwarding = 1
 			return err
 		}
 	}
-	ui.Note("Hotspot profile uses wlan0; adjust with nmcli if your adapter differs")
 	ui.Note("Generated a unique hotspot PSK; view it with: nmcli -s -g 802-11-wireless-security.psk connection show Arch-Hyprland")
+	ui.Note("Hotspot profile uses wlan0; adjust with nmcli if your adapter differs")
+	ui.Note("nmcli conn modify Arch-Hyprland connection.interface-name __ip link__")
+	ui.Note("nmcli conn modify Arch-Hyprland 802-11-wireless-security.psk __new passwd__")
 	return nil
 }
 
