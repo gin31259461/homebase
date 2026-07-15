@@ -15,22 +15,34 @@ func (m SelectorModel) View() string {
 	contentWidth := m.listContentWidth()
 	b.WriteString(TitleStyle.Render(m.title))
 	b.WriteString("\n")
-	help := "j/k move, gg/G jump, space toggles, a selects all, i inspects, ctrl+d/u scroll inspect, enter confirms, q exits"
+	help := "j/k move, gg/G jump, / filters, space toggles, a selects matches, i inspects, ctrl+d/u scroll inspect, enter confirms, q exits"
+	if m.filtering {
+		help = "type to filter, backspace edits, ctrl+u clears, enter keeps filter, esc clears"
+	}
 	appendWrapped(&b, help, contentWidth, "", DimStyle)
+	if m.filtering || m.filterText != "" {
+		cursor := ""
+		if m.filtering {
+			cursor = "_"
+		}
+		filter := fmt.Sprintf("filter: %s%s · %d/%d items", m.filterText, cursor, len(m.matchingItemIndices()), len(m.items))
+		appendWrapped(&b, filter, contentWidth, "", DimStyle)
+	}
 	b.WriteString("\n")
 	m.appendList(&b, contentWidth)
-	if m.inspect && len(m.items) > 0 {
+	if _, ok := m.currentItemIndex(); m.inspect && ok {
 		m.appendInspect(&b, contentWidth)
 	}
 	return b.String()
 }
 
 func (m SelectorModel) appendList(b *strings.Builder, contentWidth int) {
+	indices := m.matchingItemIndices()
 	visible := m.visibleCount()
 	start := m.offset
 	end := start + visible
-	if end > len(m.items) {
-		end = len(m.items)
+	if end > len(indices) {
+		end = len(indices)
 	}
 
 	list := selectorListView{
@@ -41,17 +53,20 @@ func (m SelectorModel) appendList(b *strings.Builder, contentWidth int) {
 	}
 	list.keyWidth, list.labelWidth = selectorColumnWidths(contentWidth)
 	list.scrollbar = newScrollbarRenderer(scrollbarGeometryFor(
-		m.listVisualLineCount(0, len(m.items), contentWidth),
-		m.listVisualLineCount(start, end, contentWidth),
-		m.listVisualLineCount(0, start, contentWidth),
+		m.listVisualLineCount(indices, 0, len(indices), contentWidth),
+		m.listVisualLineCount(indices, start, end, contentWidth),
+		m.listVisualLineCount(indices, 0, start, contentWidth),
 		m.scrollbarConfig,
 	))
 
-	for i := start; i < end; i++ {
-		list.appendItem(m, i)
+	for position := start; position < end; position++ {
+		list.appendItem(m, position, indices[position])
 	}
-	if len(m.items) > visible {
-		b.WriteString(DimStyle.Render(fmt.Sprintf("\nshowing %d-%d of %d", start+1, end, len(m.items))))
+	if len(indices) == 0 {
+		b.WriteString(DimStyle.Render("No items match the current filter"))
+		b.WriteString("\n")
+	} else if len(indices) > visible {
+		b.WriteString(DimStyle.Render(fmt.Sprintf("\nshowing %d-%d of %d", start+1, end, len(indices))))
 	}
 }
 
@@ -63,10 +78,10 @@ type selectorListView struct {
 	scrollbar    scrollbarRenderer
 }
 
-func (v *selectorListView) appendItem(m SelectorModel, index int) {
+func (v *selectorListView) appendItem(m SelectorModel, position, index int) {
 	item := m.items[index]
 	cursor := " "
-	if index == m.cursor {
+	if position == m.cursor {
 		cursor = ">"
 	}
 	box := "[ ]"
@@ -178,19 +193,19 @@ func commonPrefix(a, b string) string {
 	return string(ar[:i])
 }
 
-func (m SelectorModel) listVisualLineCount(start, end, contentWidth int) int {
+func (m SelectorModel) listVisualLineCount(indices []int, start, end, contentWidth int) int {
 	if start < 0 {
 		start = 0
 	}
-	if end > len(m.items) {
-		end = len(m.items)
+	if end > len(indices) {
+		end = len(indices)
 	}
 	if start > end {
 		start = end
 	}
 	lines := 0
-	for _, item := range m.items[start:end] {
-		lines += selectorItemLineCount(item, contentWidth)
+	for _, index := range indices[start:end] {
+		lines += selectorItemLineCount(m.items[index], contentWidth)
 	}
 	return lines
 }
@@ -216,12 +231,16 @@ func selectorItemLineCount(item SelectItem, contentWidth int) int {
 }
 
 func (m SelectorModel) appendInspect(b *strings.Builder, contentWidth int) {
-	inspect := strings.TrimSpace(m.items[m.cursor].Inspect)
+	index, ok := m.currentItemIndex()
+	if !ok {
+		return
+	}
+	inspect := strings.TrimSpace(m.items[index].Inspect)
 	if inspect == "" {
 		return
 	}
 	b.WriteString("\n\n")
-	b.WriteString(TitleStyle.Render("Inspect " + m.items[m.cursor].Key))
+	b.WriteString(TitleStyle.Render("Inspect " + m.items[index].Key))
 	b.WriteString("\n")
 	lines := strings.Split(inspect, "\n")
 	lines = wrapLines(lines, contentWidth-2)
@@ -299,10 +318,11 @@ func selectorColumnWidths(width int) (int, int) {
 }
 
 func (m SelectorModel) clampInspectOffset() int {
-	if !m.inspect || len(m.items) == 0 {
+	index, ok := m.currentItemIndex()
+	if !m.inspect || !ok {
 		return 0
 	}
-	lines := wrapLines(strings.Split(strings.TrimSpace(m.items[m.cursor].Inspect), "\n"), m.listContentWidth()-2)
+	lines := wrapLines(strings.Split(strings.TrimSpace(m.items[index].Inspect), "\n"), m.listContentWidth()-2)
 	maxOffset := len(lines) - InspectHeight
 	if maxOffset < 0 {
 		maxOffset = 0

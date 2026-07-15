@@ -86,6 +86,96 @@ func TestSelectorVimJumps(t *testing.T) {
 	}
 }
 
+func TestSelectorFilterMatchesKeyLabelDetailAndInspect(t *testing.T) {
+	model := NewSelector("test", []SelectItem{
+		{Key: "core", Label: "Core packages", Detail: "base workstation"},
+		{Key: "docker", Label: "Containers", Inspect: "Docker service and user group"},
+		{Key: "npm-cache", Label: "JavaScript cache", DetailValue: "12 MiB reclaimable"},
+	})
+
+	tests := []struct {
+		filter string
+		want   int
+	}{
+		{filter: "CORE", want: 0},
+		{filter: "containers", want: 1},
+		{filter: "docker group", want: 1},
+		{filter: "12 mib", want: 2},
+	}
+	for _, tt := range tests {
+		model.filterText = tt.filter
+		got := model.matchingItemIndices()
+		if len(got) != 1 || got[0] != tt.want {
+			t.Fatalf("filter %q matched %#v; want [%d]", tt.filter, got, tt.want)
+		}
+	}
+}
+
+func TestSelectorFilterInputLifecycle(t *testing.T) {
+	model := NewSelector("test", []SelectItem{{Key: "core"}, {Key: "docker"}})
+	model = updateSelector(model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	model = updateSelector(model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("dock")})
+	if !model.filtering || model.filterText != "dock" {
+		t.Fatalf("active filter = %q, filtering=%v; want dock and active", model.filterText, model.filtering)
+	}
+	if got := model.matchingItemIndices(); len(got) != 1 || got[0] != 1 {
+		t.Fatalf("filtered indices = %#v; want [1]", got)
+	}
+
+	model = updateSelector(model, tea.KeyMsg{Type: tea.KeyEnter})
+	if model.filtering || model.done || model.filterText != "dock" {
+		t.Fatalf("enter should keep filter without confirming: %#v", model)
+	}
+	model = updateSelector(model, tea.KeyMsg{Type: tea.KeyEsc})
+	if model.filterText != "" || model.quitting {
+		t.Fatalf("first esc should clear filter without quitting: %#v", model)
+	}
+	model = updateSelector(model, tea.KeyMsg{Type: tea.KeyEsc})
+	if !model.quitting {
+		t.Fatal("second esc should quit after the filter is clear")
+	}
+}
+
+func TestSelectorFilteredSelectionUsesOriginalItemIdentity(t *testing.T) {
+	model := NewSelector("test", []SelectItem{
+		{Key: "core", DefaultSelected: true},
+		{Key: "docker"},
+		{Key: "dev"},
+	})
+	model = updateSelector(model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	model = updateSelector(model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("docker")})
+	model = updateSelector(model, tea.KeyMsg{Type: tea.KeyEnter})
+	model = updateSelector(model, tea.KeyMsg{Type: tea.KeySpace})
+	if got := strings.Join(model.SelectedKeys(), ","); got != "core,docker" {
+		t.Fatalf("selected after filtered toggle = %q; want core,docker", got)
+	}
+
+	model = updateSelector(model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	if got := strings.Join(model.SelectedKeys(), ","); got != "core" {
+		t.Fatalf("filtered select-all toggle changed hidden selection: %q; want core", got)
+	}
+}
+
+func TestSelectorFilterViewHandlesNoMatches(t *testing.T) {
+	model := NewSelector("test", []SelectItem{{Key: "core", Label: "Core"}})
+	model.filterText = "missing"
+	model.filtering = true
+	model = updateSelector(model, tea.KeyMsg{Type: tea.KeyDown})
+	model = updateSelector(model, tea.KeyMsg{Type: tea.KeySpace})
+	view := model.View()
+	if !strings.Contains(view, "filter: missing") || !strings.Contains(view, "0/1 items") {
+		t.Fatalf("view lost filter summary:\n%s", view)
+	}
+	if !strings.Contains(view, "No items match the current filter") {
+		t.Fatalf("view lost empty-filter state:\n%s", view)
+	}
+}
+
+func updateSelector(model SelectorModel, msg tea.KeyMsg) SelectorModel {
+	updated, _ := model.Update(msg)
+	return updated.(SelectorModel)
+}
+
 func TestSelectorStateTextHighlight(t *testing.T) {
 	tests := []struct {
 		state SelectState

@@ -146,7 +146,9 @@ hb install --all --yes
 
 Without flags, Homebase opens an interactive selector. With flags, it builds an
 install plan from the selected TOML groups and skips packages already detected
-as installed where the platform scanner supports it.
+as installed where the platform scanner supports it. Press `/` in any selector
+to filter by key, label, status detail, or inspection text. Press `Enter` to keep
+the filter and return to navigation, or `Esc` to clear it.
 
 ### Rerun setup hooks
 

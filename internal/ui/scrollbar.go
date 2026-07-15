@@ -24,7 +24,7 @@ func (r *scrollbarRenderer) Next() string {
 }
 
 func (m SelectorModel) scrollbar(row, visible int) string {
-	return renderScrollbar(row, scrollbarGeometryFor(len(m.items), visible, m.offset, m.scrollbarConfig))
+	return renderScrollbar(row, scrollbarGeometryFor(len(m.matchingItemIndices()), visible, m.offset, m.scrollbarConfig))
 }
 
 func (m SelectorModel) inspectScrollbar(row, visible, total int) string {

@@ -14,7 +14,7 @@ pacman = [
   "vulkan-radeon",
   "lib32-vulkan-radeon",
   "libva-utils",
-  "libva-mesa-driver",
+  # "libva-mesa-driver",
   "amd-ucode",
   "amdgpu_top",
   "vulkan-tools",
@@ -50,9 +50,9 @@ aur = [
 #   "supergfxctl",
 # ]
 
-[msi]
-label = "MSI"
-aur = [
-  "msi-ec-git",
-  "mcontrolcenter-bin",
-]
+# [msi]
+# label = "MSI"
+# aur = [
+#   "msi-ec-git",
+#   "mcontrolcenter-bin",
+# ]

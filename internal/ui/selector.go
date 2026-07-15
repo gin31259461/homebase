@@ -34,6 +34,8 @@ type SelectorModel struct {
 	height          int
 	width           int
 	selected        map[int]bool
+	filterText      string
+	filtering       bool
 	inspect         bool
 	inspectOffset   int
 	pendingG        bool
@@ -117,11 +119,33 @@ func (m SelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m = m.keepCursorVisible()
 	case tea.KeyMsg:
 		key := msg.String()
-		oldCursor := m.cursor
-		switch key {
-		case "ctrl+c", "esc", "q":
+		if key == "ctrl+c" {
 			m.quitting = true
 			return m, tea.Quit
+		}
+		if m.filtering {
+			m = m.updateFilter(msg)
+			return m.keepCursorVisible(), nil
+		}
+		indices := m.matchingItemIndices()
+		oldCursor := m.cursor
+		switch key {
+		case "esc":
+			if m.filterText != "" {
+				m = m.clearFilter()
+				return m, nil
+			}
+			m.quitting = true
+			return m, tea.Quit
+		case "q":
+			m.quitting = true
+			return m, tea.Quit
+		case "/":
+			m.filtering = true
+			m.pendingG = false
+			m.inspect = false
+			m.inspectOffset = 0
+			return m, nil
 		case "ctrl+u":
 			if m.inspect {
 				m.inspectOffset -= InspectHeight / 2
@@ -141,7 +165,7 @@ func (m SelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor--
 			}
 		case "down", "j":
-			if m.cursor < len(m.items)-1 {
+			if m.cursor < len(indices)-1 {
 				m.cursor++
 			}
 		case "pgup":
@@ -151,14 +175,17 @@ func (m SelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "pgdown":
 			m.cursor += m.visibleCount()
-			if m.cursor >= len(m.items) {
-				m.cursor = len(m.items) - 1
+			if m.cursor >= len(indices) {
+				m.cursor = len(indices) - 1
+				if m.cursor < 0 {
+					m.cursor = 0
+				}
 			}
 		case "home":
 			m.cursor = 0
 		case "end", "G", "shift+g":
-			if len(m.items) > 0 {
-				m.cursor = len(m.items) - 1
+			if len(indices) > 0 {
+				m.cursor = len(indices) - 1
 			}
 		case "g":
 			if m.pendingG {
@@ -169,20 +196,31 @@ func (m SelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		case " ", "x":
-			if len(m.items) > 0 {
-				m.selected[m.cursor] = !m.selected[m.cursor]
+			if index, ok := m.currentItemIndex(); ok {
+				if m.selected[index] {
+					delete(m.selected, index)
+				} else {
+					m.selected[index] = true
+				}
 			}
 		case "i":
-			if len(m.items) > 0 && strings.TrimSpace(m.items[m.cursor].Inspect) != "" {
+			if index, ok := m.currentItemIndex(); ok && strings.TrimSpace(m.items[index].Inspect) != "" {
 				m.inspect = !m.inspect
 				m.inspectOffset = 0
 			}
 		case "a":
-			all := len(m.selected) != len(m.items)
-			m.selected = map[int]bool{}
-			if all {
-				for i := range m.items {
-					m.selected[i] = true
+			allSelected := len(indices) > 0
+			for _, index := range indices {
+				if !m.selected[index] {
+					allSelected = false
+					break
+				}
+			}
+			for _, index := range indices {
+				if allSelected {
+					delete(m.selected, index)
+				} else {
+					m.selected[index] = true
 				}
 			}
 		case "enter":
@@ -199,6 +237,89 @@ func (m SelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m = m.keepCursorVisible()
 	m.inspectOffset = m.clampInspectOffset()
 	return m, nil
+}
+
+func (m SelectorModel) updateFilter(msg tea.KeyMsg) SelectorModel {
+	key := msg.String()
+	switch key {
+	case "esc":
+		return m.clearFilter()
+	case "enter":
+		m.filtering = false
+		return m
+	case "backspace", "ctrl+h", "delete":
+		runes := []rune(m.filterText)
+		if len(runes) > 0 {
+			m.filterText = string(runes[:len(runes)-1])
+			return m.resetFilterPosition()
+		}
+	case "ctrl+u":
+		m.filterText = ""
+		return m.resetFilterPosition()
+	default:
+		if msg.Type == tea.KeyRunes {
+			m.filterText += string(msg.Runes)
+			return m.resetFilterPosition()
+		}
+		if key == " " {
+			m.filterText += " "
+			return m.resetFilterPosition()
+		}
+	}
+	return m
+}
+
+func (m SelectorModel) clearFilter() SelectorModel {
+	m.filterText = ""
+	m.filtering = false
+	return m.resetFilterPosition()
+}
+
+func (m SelectorModel) resetFilterPosition() SelectorModel {
+	m.cursor = 0
+	m.offset = 0
+	m.inspect = false
+	m.inspectOffset = 0
+	m.pendingG = false
+	return m
+}
+
+func (m SelectorModel) matchingItemIndices() []int {
+	terms := strings.Fields(strings.ToLower(strings.TrimSpace(m.filterText)))
+	indices := make([]int, 0, len(m.items))
+	for i, item := range m.items {
+		if itemMatchesFilter(item, terms) {
+			indices = append(indices, i)
+		}
+	}
+	return indices
+}
+
+func itemMatchesFilter(item SelectItem, terms []string) bool {
+	if len(terms) == 0 {
+		return true
+	}
+	haystack := strings.ToLower(strings.Join([]string{
+		item.Key,
+		item.Label,
+		item.DetailValue,
+		item.Detail,
+		item.Inspect,
+	}, "\n"))
+	for _, term := range terms {
+		if !strings.Contains(haystack, term) {
+			return false
+		}
+	}
+	return true
+}
+
+func (m SelectorModel) currentItemIndex() (int, bool) {
+	indices := m.matchingItemIndices()
+	if m.cursor < 0 || m.cursor >= len(indices) {
+		return 0, false
+	}
+	return indices[m.cursor], true
 }
 
 func (m SelectorModel) SelectedKeys() []string {
@@ -224,7 +345,16 @@ func (m SelectorModel) visibleCount() int {
 
 func (m SelectorModel) keepCursorVisible() SelectorModel {
 	visible := m.visibleCount()
-	if visible >= len(m.items) {
+	total := len(m.matchingItemIndices())
+	if total == 0 {
+		m.cursor = 0
+		m.offset = 0
+		return m
+	}
+	if m.cursor >= total {
+		m.cursor = total - 1
+	}
+	if visible >= total {
 		m.offset = 0
 		return m
 	}
@@ -234,7 +364,7 @@ func (m SelectorModel) keepCursorVisible() SelectorModel {
 	if m.cursor >= m.offset+visible {
 		m.offset = m.cursor - visible + 1
 	}
-	maxOffset := len(m.items) - visible
+	maxOffset := total - visible
 	if m.offset > maxOffset {
 		m.offset = maxOffset
 	}
