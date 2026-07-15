@@ -167,6 +167,120 @@ func groupHasInstalledPackage(group config.PackageGroup, installed map[string]bo
 	return false
 }
 
+func gitCredentials(r run.Runner) error {
+	initialized, err := passwordStoreInitialized()
+	if err != nil {
+		return err
+	}
+	if initialized {
+		ui.OK("Password store already initialized")
+		return configureGitCredentialManager(r)
+	}
+
+	before, err := secretKeyFingerprints(r)
+	if err != nil {
+		return fmt.Errorf("list existing GPG secret keys: %w", err)
+	}
+	ui.Note("GPG will prompt for your real name, email, and key passphrase")
+	if err := r.Run("gpg", "--gen-key"); err != nil {
+		return fmt.Errorf("generate GPG key: %w", err)
+	}
+	after, err := secretKeyFingerprints(r)
+	if err != nil {
+		return fmt.Errorf("list generated GPG secret key: %w", err)
+	}
+	fingerprint, err := addedSecretKeyFingerprint(before, after)
+	if err != nil {
+		return err
+	}
+	if err := r.Run("pass", "init", fingerprint); err != nil {
+		return fmt.Errorf("initialize password store: %w", err)
+	}
+	ui.OK("Initialized password store with GPG key " + fingerprint)
+	return configureGitCredentialManager(r)
+}
+
+func passwordStoreInitialized() (bool, error) {
+	dir := strings.TrimSpace(os.Getenv("PASSWORD_STORE_DIR"))
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return false, fmt.Errorf("find home directory: %w", err)
+		}
+		dir = filepath.Join(home, ".password-store")
+	}
+	content, err := os.ReadFile(filepath.Join(dir, ".gpg-id"))
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("read password store GPG ID: %w", err)
+	}
+	return strings.TrimSpace(string(content)) != "", nil
+}
+
+func secretKeyFingerprints(r run.Runner) ([]string, error) {
+	output, err := r.Capture("gpg", "--batch", "--with-colons", "--fingerprint", "--list-secret-keys")
+	if err != nil {
+		return nil, err
+	}
+	return parsePrimarySecretKeyFingerprints(output), nil
+}
+
+func parsePrimarySecretKeyFingerprints(output string) []string {
+	var fingerprints []string
+	wantFingerprint := false
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Split(line, ":")
+		if len(fields) == 0 {
+			continue
+		}
+		switch fields[0] {
+		case "sec":
+			wantFingerprint = true
+		case "ssb":
+			wantFingerprint = false
+		case "fpr":
+			if wantFingerprint && len(fields) > 9 && fields[9] != "" {
+				fingerprints = append(fingerprints, fields[9])
+				wantFingerprint = false
+			}
+		}
+	}
+	return fingerprints
+}
+
+func addedSecretKeyFingerprint(before, after []string) (string, error) {
+	existing := make(map[string]bool, len(before))
+	for _, fingerprint := range before {
+		existing[fingerprint] = true
+	}
+	var added []string
+	for _, fingerprint := range after {
+		if !existing[fingerprint] {
+			added = append(added, fingerprint)
+		}
+	}
+	if len(added) == 0 {
+		return "", fmt.Errorf("GPG key generation completed but no new secret key was found")
+	}
+	if len(added) > 1 {
+		return "", fmt.Errorf("GPG key generation added multiple secret keys; initialize pass manually with the intended key")
+	}
+	return added[0], nil
+}
+
+func configureGitCredentialManager(r run.Runner) error {
+	if err := r.Run("git-credential-manager", "configure"); err != nil {
+		return fmt.Errorf("configure Git Credential Manager: %w", err)
+	}
+	if err := r.Run("git", "config", "--global", "credential.credentialStore", "gpg"); err != nil {
+		return fmt.Errorf("select GPG credential store: %w", err)
+	}
+	ui.OK("Configured Git Credential Manager to use the GPG credential store")
+	return nil
+}
+
 func autologin(r run.Runner) error {
 	user := os.Getenv("USER")
 	content := "[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin " + user + " --noclear %I $TERM\n"

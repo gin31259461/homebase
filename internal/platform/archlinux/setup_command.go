@@ -3,6 +3,7 @@ package archlinux
 import (
 	"flag"
 	"fmt"
+	"strings"
 
 	"github.com/gin31259461/homebase/internal/completion"
 	"github.com/gin31259461/homebase/internal/config"
@@ -67,9 +68,9 @@ func runSetupCommand(args []string, r run.Runner) error {
 	var runnable []string
 	ui.Section("Setup plan")
 	for _, key := range selected {
-		requirement := setupRequirement(key)
-		if requirement != "" && installed != nil && !installed[requirement] {
-			ui.Warn(hookByKey[key].Label + " skipped; missing package: " + requirement)
+		missing := missingSetupRequirements(setupRequirements(key), installed)
+		if installed != nil && len(missing) > 0 {
+			ui.Warn(hookByKey[key].Label + " skipped; missing packages: " + strings.Join(missing, ", "))
 			continue
 		}
 		fmt.Printf("  %s %s\n", ui.OKStyle.Render("+"), hookByKey[key].Label)
@@ -102,57 +103,77 @@ func setupHooks() []platform.SetupHook {
 		{Key: "sunshine", Label: "Sunshine service and capabilities"},
 		{Key: "sddm", Label: "SDDM display manager"},
 		{Key: "autologin", Label: "TTY1 autologin"},
+		{Key: "git-credentials", Label: "Git Credential Manager (GPG/pass)"},
 	}
 }
 
-func setupRequirement(key string) string {
+func setupRequirements(key string) []string {
 	switch key {
 	case "shell":
-		return "zsh"
+		return []string{"zsh"}
 	case "network":
-		return "networkmanager"
+		return []string{"networkmanager"}
 	case "docker":
-		return "docker"
+		return []string{"docker"}
 	case "razer":
-		return "openrazer-daemon"
+		return []string{"openrazer-daemon"}
 	case "sunshine":
-		return "sunshine"
+		return []string{"sunshine"}
 	case "sddm":
-		return "sddm"
+		return []string{"sddm"}
+	case "git-credentials":
+		return []string{"git", "gnupg", "pass", "git-credential-manager-bin"}
 	default:
-		return ""
+		return nil
 	}
 }
 
 func setupHookItems(hooks []platform.SetupHook, installed map[string]bool) []ui.SelectItem {
 	items := make([]ui.SelectItem, 0, len(hooks))
 	for _, hook := range hooks {
-		requirement := setupRequirement(hook.Key)
+		requirements := setupRequirements(hook.Key)
+		missing := missingSetupRequirements(requirements, installed)
 		state := ui.SelectStateGood
 		detail := "ready"
-		if requirement != "" && installed == nil {
+		if len(requirements) > 0 && installed == nil {
 			state = ui.SelectStateUnknown
 			detail = "prerequisite unknown"
-		} else if requirement != "" && !installed[requirement] {
+		} else if len(missing) == 1 {
 			state = ui.SelectStateBad
-			detail = "missing " + requirement
+			detail = "missing " + missing[0]
+		} else if len(missing) > 1 {
+			state = ui.SelectStateBad
+			detail = fmt.Sprintf("missing %d packages", len(missing))
 		}
 		items = append(items, ui.SelectItem{
 			Key:         hook.Key,
 			Label:       hook.Label,
 			DetailValue: detail,
-			Inspect:     "Hook: " + hook.Key + "\nRequired package: " + displayRequirement(requirement),
+			Inspect:     "Hook: " + hook.Key + "\nRequired packages: " + displayRequirements(requirements),
 			State:       state,
 		})
 	}
 	return items
 }
 
-func displayRequirement(requirement string) string {
-	if requirement == "" {
+func missingSetupRequirements(requirements []string, installed map[string]bool) []string {
+	if installed == nil {
+		return nil
+	}
+	var missing []string
+	for _, requirement := range requirements {
+		if !installed[requirement] {
+			missing = append(missing, requirement)
+		}
+	}
+	return missing
+}
+
+func displayRequirements(requirements []string) string {
+	if len(requirements) == 0 {
 		return "none"
 	}
-	return requirement
+	return strings.Join(requirements, ", ")
 }
 
 func setupHookSet(hooks []platform.SetupHook) map[string]bool {
@@ -167,6 +188,10 @@ func runStandaloneSetupHook(r run.Runner, key string) error {
 	if key == "system" {
 		ui.Section("Setup system")
 		return systemSetup(r)
+	}
+	if key == "git-credentials" {
+		ui.Section("Setup Git credentials")
+		return gitCredentials(r)
 	}
 	return runSetupKey(r, key)
 }

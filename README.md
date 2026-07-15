@@ -158,6 +158,7 @@ the filter and return to navigation, or `Esc` to clear it.
 hb setup
 hb setup --hook system --yes
 hb setup --hook shell --yes
+hb setup --hook git-credentials
 hb setup --all --yes
 ```
 
@@ -165,6 +166,12 @@ Setup hooks repair platform configuration without installing packages. The
 interactive selector reports missing prerequisites; explicit and `--all`
 selections skip hooks whose required packages are not installed. If package
 scanning fails, hooks remain runnable because prerequisite state is unknown.
+
+The Arch `git-credentials` hook is manual-only because GPG prompts for your
+real name, email, and key passphrase. It generates a GPG key, initializes
+`pass` with the new key fingerprint, configures Git Credential Manager, and
+sets `credential.credentialStore` to `gpg`. If the password store already has a
+`.gpg-id`, rerunning the hook keeps that key and only repairs the Git settings.
 
 On Arch Linux, bootstrap installs `_hb` into Zsh's system completion directory.
 Run `hb setup --hook shell --yes` to regenerate it after changing configured

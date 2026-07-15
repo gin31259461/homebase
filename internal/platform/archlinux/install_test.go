@@ -229,6 +229,78 @@ func TestSetupHookItemsShowMissingAndUnknownPrerequisites(t *testing.T) {
 	if unknownShell.State != ui.SelectStateUnknown || unknownShell.DetailValue != "prerequisite unknown" {
 		t.Fatalf("unknown shell item = %#v", unknownShell)
 	}
+
+	var missingCredentials ui.SelectItem
+	for i := range hooks {
+		if hooks[i].Key == "git-credentials" {
+			missingCredentials = missing[i]
+			break
+		}
+	}
+	if missingCredentials.State != ui.SelectStateBad || missingCredentials.DetailValue != "missing 4 packages" {
+		t.Fatalf("missing git credentials item = %#v", missingCredentials)
+	}
+	for _, requirement := range []string{"git", "gnupg", "pass", "git-credential-manager-bin"} {
+		if !strings.Contains(missingCredentials.Inspect, requirement) {
+			t.Fatalf("git credentials inspection %q does not include %q", missingCredentials.Inspect, requirement)
+		}
+	}
+}
+
+func TestGitCredentialsGeneratesKeyAndInitializesPass(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	const existing = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+	const generated = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+	r := &credentialSetupRunner{gpgListings: []string{
+		secretKeyListing(existing, "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"),
+		secretKeyListing(existing, "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC") + secretKeyListing(generated, "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"),
+	}}
+
+	if err := gitCredentials(r); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"gpg --batch --with-colons --fingerprint --list-secret-keys",
+		"gpg --gen-key",
+		"gpg --batch --with-colons --fingerprint --list-secret-keys",
+		"pass init " + generated,
+		"git-credential-manager configure",
+		"git config --global credential.credentialStore gpg",
+	}
+	if !reflect.DeepEqual(r.Calls, want) {
+		t.Fatalf("calls = %#v; want %#v", r.Calls, want)
+	}
+}
+
+func TestGitCredentialsReusesInitializedPasswordStore(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeTestFile(t, filepath.Join(home, ".password-store", ".gpg-id"), "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n")
+	r := &testutil.Runner{}
+
+	if err := gitCredentials(r); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"git-credential-manager configure",
+		"git config --global credential.credentialStore gpg",
+	}
+	if !reflect.DeepEqual(r.Calls, want) {
+		t.Fatalf("calls = %#v; want %#v", r.Calls, want)
+	}
+}
+
+func TestGitCredentialsIsNotAnAutomaticPackageSetupHook(t *testing.T) {
+	if setupExists("git-credentials") {
+		t.Fatal("git-credentials must only run through the standalone hb setup command")
+	}
+}
+
+func secretKeyListing(primaryFingerprint, subkeyFingerprint string) string {
+	return "sec:u:255:22:0123456789ABCDEF:0:0:::::scESC:::+::ed25519:::0:\n" +
+		"fpr:::::::::" + primaryFingerprint + ":\n" +
+		"ssb:u:255:18:FEDCBA9876543210:0:0:::::e:::+::cv25519::\n" +
+		"fpr:::::::::" + subkeyFingerprint + ":\n"
 }
 
 func TestParseInstalledPackages(t *testing.T) {
@@ -277,6 +349,24 @@ type installFileRunner struct {
 type completionInstallRunner struct {
 	testutil.Runner
 	installed map[string]string
+}
+
+type credentialSetupRunner struct {
+	testutil.Runner
+	gpgListings []string
+}
+
+func (r *credentialSetupRunner) Capture(name string, args ...string) (string, error) {
+	if name != "gpg" {
+		return r.Runner.Capture(name, args...)
+	}
+	r.Calls = append(r.Calls, name+" "+strings.Join(args, " "))
+	if len(r.gpgListings) == 0 {
+		return "", testutil.Err()
+	}
+	output := r.gpgListings[0]
+	r.gpgListings = r.gpgListings[1:]
+	return output, nil
 }
 
 func (r *completionInstallRunner) Run(name string, args ...string) error {

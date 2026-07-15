@@ -24,6 +24,7 @@ pacman = [
 label = "Dev Tools"
 pacman = [
   "git",
+  "gnupg",
   "npm",
   "pass",
 ]
