@@ -14,6 +14,7 @@ pacman = [
   "vulkan-radeon",
   "lib32-vulkan-radeon",
   "libva-utils",
+  "libva-mesa-driver",
   "amd-ucode",
   "amdgpu_top",
   "vulkan-tools",

@@ -21,6 +21,7 @@ pacman = [
   "yt-dlp",
   "baobab",
   "inxi",
+  "7zip",
   "power-profiles-daemon",
 ]
 aur = [
@@ -37,8 +38,6 @@ aur = [
 label = "Self-hosted & VPN"
 pacman = [
   "tailscale",
-]
-aur = [
   "sunshine",
 ]
 
