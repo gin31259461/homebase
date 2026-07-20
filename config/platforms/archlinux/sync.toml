@@ -50,7 +50,6 @@ paths = [
   ".config/vesktop/settings.json",
   ".config/cava",
   ".config/ghostty",
-  ".config/noctalia",
   ".config/sunshine/sunshine.conf",
   ".config/polychromatic/preferences.json",
 ]
