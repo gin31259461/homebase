@@ -11,6 +11,9 @@ pacman = [
   "uwsm",
   "libnewt",
 ]
+aur = [
+  "noctalia-git",
+]
 
 [shell]
 label = "Shell & Prompt"

@@ -63,10 +63,8 @@ pacman = [
   "tree-sitter-cli",
 ]
 
-[noctalia]
-label = "Noctalia Shell"
+[quickshell]
+label = "Quickshell"
 aur = [
-  "noctalia-shell",
-  "noctalia-qs",
   "quickshell-overview-git",
 ]
