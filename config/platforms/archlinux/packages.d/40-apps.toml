@@ -46,6 +46,7 @@ label = "Applications"
 pacman = [
   "obsidian",
   "remmina",
+  "freerdp",
   "vlc",
   "loupe",
 ]
