@@ -8,6 +8,12 @@ aur = [
   "polychromatic",
 ]
 
+[cyberpower]
+label = "CyberPower UPS"
+aur = [
+  "powerpanel",
+]
+
 [amd]
 label = "AMD GPU Drivers"
 pacman = [
