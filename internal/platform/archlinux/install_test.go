@@ -103,6 +103,44 @@ pacman = ["docker"]
 	}
 }
 
+func TestRealtimeSetupAddsCurrentUserToGroup(t *testing.T) {
+	t.Setenv("USER", "tester")
+	r := &testutil.Runner{Outputs: map[string]string{
+		"groups tester": "tester wheel",
+	}}
+
+	output := captureStdout(t, func() {
+		if err := realtime(r); err != nil {
+			t.Fatal(err)
+		}
+	})
+	want := []string{
+		"groups tester",
+		"sudo gpasswd -a tester realtime",
+	}
+	if !reflect.DeepEqual(r.Calls, want) {
+		t.Fatalf("calls = %#v; want %#v", r.Calls, want)
+	}
+	if !strings.Contains(output, "Log out and back in") {
+		t.Fatalf("output = %q; want session restart note", output)
+	}
+}
+
+func TestRealtimeSetupKeepsExistingGroupMembership(t *testing.T) {
+	t.Setenv("USER", "tester")
+	r := &testutil.Runner{Outputs: map[string]string{
+		"groups tester": "tester realtime wheel",
+	}}
+
+	if err := realtime(r); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"groups tester"}
+	if !reflect.DeepEqual(r.Calls, want) {
+		t.Fatalf("calls = %#v; want %#v", r.Calls, want)
+	}
+}
+
 func TestSystemSetupConfiguresMkinitcpioForAMDGPU(t *testing.T) {
 	r := &installFileRunner{Runner: testutil.Runner{
 		Outputs: map[string]string{
@@ -228,6 +266,17 @@ func TestSetupHookItemsShowMissingAndUnknownPrerequisites(t *testing.T) {
 	}
 	if unknownShell.State != ui.SelectStateUnknown || unknownShell.DetailValue != "prerequisite unknown" {
 		t.Fatalf("unknown shell item = %#v", unknownShell)
+	}
+
+	var missingRealtime ui.SelectItem
+	for i := range hooks {
+		if hooks[i].Key == "realtime" {
+			missingRealtime = missing[i]
+			break
+		}
+	}
+	if missingRealtime.State != ui.SelectStateBad || missingRealtime.DetailValue != "missing realtime-privileges" {
+		t.Fatalf("missing realtime item = %#v", missingRealtime)
 	}
 
 	var missingCredentials ui.SelectItem

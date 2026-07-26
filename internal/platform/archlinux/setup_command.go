@@ -99,6 +99,7 @@ func setupHooks() []platform.SetupHook {
 		{Key: "shell", Label: "Zsh command completion"},
 		{Key: "network", Label: "NetworkManager"},
 		{Key: "docker", Label: "Docker service and group"},
+		{Key: "realtime", Label: "Realtime process privileges"},
 		{Key: "razer", Label: "OpenRazer"},
 		{Key: "sunshine", Label: "Sunshine service and capabilities"},
 		{Key: "sddm", Label: "SDDM display manager"},
@@ -115,6 +116,8 @@ func setupRequirements(key string) []string {
 		return []string{"networkmanager"}
 	case "docker":
 		return []string{"docker"}
+	case "realtime":
+		return []string{"realtime-privileges"}
 	case "razer":
 		return []string{"openrazer-daemon"}
 	case "sunshine":

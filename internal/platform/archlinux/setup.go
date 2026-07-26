@@ -36,6 +36,7 @@ func setupRunners(r run.Runner) map[string]setupRunner {
 		"networkmanager": func() error { return networkManager(r) },
 		"shell":          func() error { return zshCompletion(r) },
 		"docker":         func() error { return docker(r) },
+		"realtime":       func() error { return realtime(r) },
 		"razer":          func() error { return razer(r) },
 		"sunshine":       func() error { return sunshine(r) },
 	}
@@ -384,6 +385,18 @@ func docker(r run.Runner) error {
 		}
 		ui.Note("Log out and back in for docker group changes")
 	}
+	return nil
+}
+
+func realtime(r run.Runner) error {
+	user := os.Getenv("USER")
+	if userInGroup(r, user, "realtime") {
+		return nil
+	}
+	if err := r.Run("sudo", "gpasswd", "-a", user, "realtime"); err != nil {
+		return err
+	}
+	ui.Note("Log out and back in for realtime group changes")
 	return nil
 }
 

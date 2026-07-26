@@ -25,6 +25,16 @@ pacman = [
   "mpv-mpris",
 ]
 
+[realtime]
+label = "Realtime Audio"
+pacman = [
+  "realtime-privileges",
+  "rt-tests",
+  "rtirq",
+  "schedtool",
+  "tuna",
+]
+
 [network]
 label = "Network & Bluetooth"
 pacman = [
