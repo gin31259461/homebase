@@ -52,6 +52,7 @@ paths = [
   ".config/ghostty",
   ".config/sunshine/sunshine.conf",
   ".config/polychromatic/preferences.json",
+  ".config/openrazer",
 ]
 
 [systemd-user]

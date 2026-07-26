@@ -37,6 +37,7 @@ pacman = [
   "tar",
   "curl",
   "git-delta",
+  "gimp",
 ]
 
 [terminal]
